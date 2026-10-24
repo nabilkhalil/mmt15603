@@ -1,0 +1,1384 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>ISO 3685 Tool-Life Testing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* ===========================================================
+   DESIGN PLAN
+   Layout: fixed 1920×1080 stage; each slide = section label rail
+   on the left edge, title block, then a two-zone grid
+   (explanation | live instrument). Colour system is taken from
+   the temper (oxide) colours of hot steel chips:
+   straw → bronze → purple → blue.
+   =========================================================== */
+:root {
+  --paper:  #E8ECEF;   /* tool-room steel grey */
+  --sheet:  #F7F9FA;   /* card / instrument face */
+  --ink:    #131A21;
+  --muted:  #556370;
+  --rule:   #C3CCD3;
+  --straw:  #C99A2E;   /* temper ~220 °C */
+  --bronze: #A8621C;   /* temper ~255 °C — main accent */
+  --violet: #6B4690;   /* temper ~280 °C */
+  --blue:   #2B5C97;   /* temper ~300 °C — second accent */
+  --good:   #2E7A55;
+  --bad:    #B23A2D;
+  --work:   #9AA7B1;   /* workpiece fill */
+  --tool:   #3C4954;   /* tool body fill */
+  --chrome-bg: #DCE2E6;
+  --stage-bg: var(--chrome-bg);
+  --slide-bg: var(--paper);
+
+  --f-display: 'Archivo', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --f-body: 'IBM Plex Sans', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --f-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#10161C; --sheet:#18212A; --ink:#E5EAEE; --muted:#93A1AD; --rule:#2B3743;
+    --straw:#E2B651; --bronze:#E08B3E; --violet:#A98BD0; --blue:#6F9EDB;
+    --good:#5DBB8A; --bad:#EE7A6C; --work:#4A5864; --tool:#9BA9B5; --chrome-bg:#0A0F13;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#10161C; --sheet:#18212A; --ink:#E5EAEE; --muted:#93A1AD; --rule:#2B3743;
+  --straw:#E2B651; --bronze:#E08B3E; --violet:#A98BD0; --blue:#6F9EDB;
+  --good:#5DBB8A; --bad:#EE7A6C; --work:#4A5864; --tool:#9BA9B5; --chrome-bg:#0A0F13;
+  color-scheme: dark;
+}
+
+/* ===========================================================
+   FIXED 16:9 STAGE — viewport-base.css (frontend-slides), full
+   =========================================================== */
+html, body { width:100%; height:100%; margin:0; overflow:hidden; background:var(--stage-bg, #000); }
+.deck-viewport { position:fixed; inset:0; overflow:hidden; background:var(--stage-bg, #000); }
+.deck-stage { position:absolute; left:0; top:0; width:1920px; height:1080px; overflow:hidden; transform-origin:0 0; background:var(--slide-bg, #fff); }
+.slide { position:absolute; inset:0; width:1920px; height:1080px; overflow:hidden; display:block; visibility:hidden; opacity:0; pointer-events:none; background:var(--slide-bg, #fff); }
+.slide.active, .slide.visible { visibility:visible; opacity:1; pointer-events:auto; z-index:1; }
+img, video, canvas, svg { max-width:100%; max-height:100%; }
+.deck-controls { position:fixed; right:calc(16px + env(safe-area-inset-right, 0px)); bottom:22px; z-index:1000; }
+@media print {
+  html, body { width:1920px; height:auto; overflow:visible; background:#fff; }
+  .deck-viewport { position:static; overflow:visible; background:#fff; }
+  .deck-stage { position:static; width:auto; height:auto; transform:none !important; background:none; }
+  .slide { position:relative; display:block !important; visibility:visible !important; opacity:1 !important; pointer-events:auto !important; width:1920px; height:1080px; break-after:page; page-break-after:always; }
+  .slide:last-child { break-after:auto; page-break-after:auto; }
+  .deck-controls { display:none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.2s !important; }
+}
+
+/* ===========================================================
+   BASE TYPE & SLIDE FRAME
+   =========================================================== */
+* { box-sizing:border-box; }
+body { font-family:var(--f-body); color:var(--ink); }
+.slide { color:var(--ink); font-family:var(--f-body); font-size:26px; line-height:1.45; }
+.frame { position:absolute; inset:0; padding:76px 96px 96px 150px; display:flex; flex-direction:column; gap:34px; }
+.rail { position:absolute; left:0; top:0; bottom:0; width:96px; border-right:1px solid var(--rule); display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:40px 0; }
+.rail .no { font-family:var(--f-mono); font-size:20px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.rail .lab { writing-mode:vertical-rl; transform:rotate(180deg); font-family:var(--f-display); font-stretch:115%; font-weight:600; font-size:17px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted); }
+.temper { width:8px; height:220px; border-radius:4px; background:linear-gradient(var(--straw), var(--bronze), var(--violet), var(--blue)); }
+
+.eyebrow { font-family:var(--f-mono); font-size:20px; letter-spacing:0.08em; text-transform:uppercase; color:var(--bronze); }
+h1, h2, h3 { margin:0; font-family:var(--f-display); text-wrap:balance; }
+h2 { font-size:66px; font-weight:700; font-stretch:112%; line-height:1.04; letter-spacing:-0.01em; }
+h3 { font-size:30px; font-weight:650; font-stretch:105%; line-height:1.15; }
+p { margin:0; }
+.lede { font-size:29px; color:var(--muted); max-width:1250px; }
+.small { font-size:21px; color:var(--muted); line-height:1.45; }
+.mono { font-family:var(--f-mono); font-variant-numeric:tabular-nums; }
+.head { display:flex; flex-direction:column; gap:14px; }
+.grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:48px; flex:1; min-height:0; }
+.grid-6-4 { display:grid; grid-template-columns: 1.15fr 1fr; gap:48px; flex:1; min-height:0; }
+.grid-4-6 { display:grid; grid-template-columns: 0.85fr 1.15fr; gap:48px; flex:1; min-height:0; }
+.col { display:flex; flex-direction:column; gap:22px; min-width:0; min-height:0; }
+.panel { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:28px 32px; }
+.list { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:16px; }
+.list li { position:relative; padding-left:30px; }
+.list li::before { content:""; position:absolute; left:0; top:0.62em; width:14px; height:3px; background:var(--bronze); }
+b, strong { font-weight:600; }
+.k-straw{color:var(--straw)} .k-bronze{color:var(--bronze)} .k-violet{color:var(--violet)} .k-blue{color:var(--blue)}
+.cite { font-family:var(--f-mono); font-size:17px; color:var(--muted); white-space:nowrap; }
+.cite a, .refs a { color:inherit; text-decoration:underline; text-decoration-color:var(--rule); text-underline-offset:3px; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
+
+/* entrance: content is visible at rest; only a short lift on arrival */
+.reveal { transition: transform .7s var(--ease), opacity .7s var(--ease); }
+.slide:not(.visible) .reveal { transform: translateY(18px); opacity:.35; }
+.slide.visible .reveal:nth-child(2){transition-delay:.06s} .slide.visible .reveal:nth-child(3){transition-delay:.12s} .slide.visible .reveal:nth-child(4){transition-delay:.18s}
+
+/* ===========================================================
+   CONTROLS INSIDE SLIDES (sliders, chips, buttons)
+   =========================================================== */
+.ctrl { display:grid; grid-template-columns: 200px 1fr 110px; align-items:center; gap:18px; font-size:22px; }
+.ctrl label { color:var(--muted); }
+.ctrl output { font-family:var(--f-mono); font-variant-numeric:tabular-nums; text-align:right; color:var(--ink); font-weight:500; }
+input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:3px; background:var(--rule); outline:none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; border-radius:50%; background:var(--bronze); border:4px solid var(--sheet); box-shadow:0 0 0 1px var(--bronze); cursor:pointer; }
+input[type=range]::-moz-range-thumb { width:22px; height:22px; border-radius:50%; background:var(--bronze); border:4px solid var(--sheet); cursor:pointer; }
+.chipbtn { font-family:var(--f-body); font-size:21px; padding:10px 18px; border-radius:4px; border:1px solid var(--rule); background:var(--sheet); color:var(--ink); cursor:pointer; transition:background .2s, border-color .2s, color .2s; }
+.chipbtn:hover { border-color:var(--bronze); }
+.chipbtn[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.chiprow { display:flex; flex-wrap:wrap; gap:10px; }
+.readouts { display:grid; grid-template-columns: repeat(4, 1fr); gap:0; border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:var(--sheet); }
+.readouts > div { padding:16px 20px; border-right:1px solid var(--rule); display:flex; flex-direction:column; gap:4px; }
+.readouts > div:last-child { border-right:none; }
+.readouts .k { font-size:18px; color:var(--muted); }
+.readouts .v { font-family:var(--f-mono); font-size:34px; font-weight:500; font-variant-numeric:tabular-nums; }
+.readouts .u { font-size:17px; color:var(--muted); font-family:var(--f-mono); }
+svg text { font-family:var(--f-mono); }
+.hint { font-family:var(--f-mono); font-size:18px; color:var(--muted); }
+
+/* ===========================================================
+   SLIDE 1 — TITLE
+   =========================================================== */
+.title-wrap { position:absolute; inset:0; display:grid; grid-template-columns: 1fr 820px; }
+.title-left { padding:120px 0 100px 150px; display:flex; flex-direction:column; justify-content:space-between; }
+.title-left h1 { font-size:150px; font-weight:800; font-stretch:118%; line-height:.9; letter-spacing:-0.02em; }
+.title-left h1 span { display:block; color:var(--bronze); font-stretch:70%; font-weight:500; font-size:112px; letter-spacing:0; margin-top:16px; }
+.course { display:flex; gap:40px; align-items:flex-end; }
+.course .code { font-family:var(--f-mono); font-size:30px; padding:8px 16px; border:2px solid var(--ink); border-radius:4px; }
+.course .meta { font-size:24px; color:var(--muted); line-height:1.4; }
+.title-right { position:relative; background:var(--sheet); border-left:1px solid var(--rule); display:flex; flex-direction:column; justify-content:center; padding:60px; gap:28px; }
+.temper-scale { display:grid; grid-template-columns: repeat(4,1fr); gap:6px; }
+.temper-scale div { height:16px; border-radius:2px; }
+.temper-scale span { font-family:var(--f-mono); font-size:16px; color:var(--muted); }
+.flow-anim { animation: flowdash 1.6s linear infinite; }
+@keyframes flowdash { to { stroke-dashoffset: -40; } }
+
+/* ===========================================================
+   SLIDE 2 — ROADMAP
+   =========================================================== */
+.roadmap { display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; }
+.stop { text-align:left; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:24px 26px; display:flex; flex-direction:column; gap:8px; cursor:pointer; font:inherit; color:inherit; transition:border-color .2s, transform .2s; }
+.stop:hover { border-color:var(--bronze); transform:translateY(-2px); }
+.stop .n { font-family:var(--f-mono); font-size:18px; color:var(--bronze); }
+.stop .t { font-family:var(--f-display); font-weight:650; font-size:29px; font-stretch:105%; line-height:1.15; }
+.stop .d { font-size:20px; color:var(--muted); line-height:1.4; }
+.outcomes { display:grid; grid-template-columns: repeat(3,1fr); gap:28px; }
+.outcomes div { border-top:3px solid var(--ink); padding-top:14px; font-size:23px; }
+.outcomes .co { font-family:var(--f-mono); font-size:17px; color:var(--muted); display:block; margin-bottom:6px; }
+
+/* ===========================================================
+   SLIDE 4 — ANATOMY (hotspots)
+   =========================================================== */
+.part { cursor:pointer; transition: opacity .25s, stroke-width .25s; }
+.anat.focus .part { opacity:.28; }
+.anat.focus .part.on { opacity:1; }
+.partlist { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.partlist button { text-align:left; }
+.defbox { min-height:250px; display:flex; flex-direction:column; gap:12px; }
+.defbox .sym { font-family:var(--f-mono); color:var(--bronze); font-size:22px; }
+
+/* ASA decoder */
+.sig { display:flex; gap:6px; flex-wrap:nowrap; font-family:var(--f-mono); font-size:36px; font-weight:500; }
+.sig button { font:inherit; padding:6px 12px; border:1px solid var(--rule); border-radius:4px; background:var(--sheet); color:var(--ink); cursor:pointer; font-variant-numeric:tabular-nums; }
+.sig button[aria-pressed="true"] { background:var(--bronze); color:#fff; border-color:var(--bronze); }
+.sig .dash { align-self:center; color:var(--muted); }
+table.angles { width:100%; border-collapse:collapse; font-size:21px; }
+table.angles th, table.angles td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--rule); vertical-align:top; }
+table.angles th { font-family:var(--f-mono); font-weight:500; font-size:17px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+table.angles td.sym { font-family:var(--f-mono); color:var(--bronze); white-space:nowrap; }
+
+/* rake class cards */
+.cards3 { display:grid; grid-template-columns: repeat(3, 1fr); gap:28px; flex:1; min-height:0; }
+.rcard { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:26px 28px; display:flex; flex-direction:column; gap:14px; }
+.rcard .tag { font-family:var(--f-mono); font-size:20px; letter-spacing:.04em; }
+.rcard .svgbox { height:200px; display:flex; justify-content:center; }
+.rcard dl { margin:0; display:grid; grid-template-columns: 120px 1fr; gap:8px 14px; font-size:20px; line-height:1.4; }
+.rcard dt { color:var(--muted); font-family:var(--f-mono); font-size:16px; text-transform:uppercase; letter-spacing:.05em; padding-top:3px; }
+.rcard dd { margin:0; }
+
+/* evidence cards */
+.evid { display:grid; grid-template-columns: 1fr 1fr; gap:24px; }
+.ev { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:24px 28px; display:flex; flex-direction:column; gap:10px; }
+.ev .what { font-family:var(--f-mono); font-size:17px; color:var(--blue); text-transform:uppercase; letter-spacing:.06em; }
+.ev p { font-size:23px; }
+
+/* quiz */
+.quiz { display:grid; grid-template-columns: 1fr 1fr; gap:24px; }
+.q { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:22px 26px; display:flex; flex-direction:column; gap:12px; }
+.q .qt { font-size:23px; font-weight:500; }
+.q .opts { display:flex; flex-wrap:wrap; gap:8px; }
+.q .opts button { font-size:21px; padding:9px 16px; }
+.q .opts button.right { background:var(--good); color:#fff; border-color:var(--good); }
+.q .opts button.wrong { background:var(--bad); color:#fff; border-color:var(--bad); }
+.q .fb { font-size:19px; color:var(--muted); min-height:56px; }
+
+/* assignment */
+.tasks { counter-reset:t; margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:14px; }
+.tasks li { counter-increment:t; display:grid; grid-template-columns: 56px 1fr; gap:12px; font-size:24px; }
+.tasks li::before { content: counter(t, decimal-leading-zero); font-family:var(--f-mono); color:var(--bronze); font-size:22px; padding-top:2px; }
+.tasks li .note { display:block; font-size:19px; color:var(--muted); margin-top:4px; }
+.propcard { font-family:var(--f-mono); }
+.propcard .row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px dashed var(--rule); font-size:23px; font-variant-numeric:tabular-nums; }
+.propcard .row span:first-child { color:var(--muted); font-family:var(--f-body); }
+
+/* references */
+.refs { columns:2; column-gap:56px; font-size:18.5px; line-height:1.42; margin:0; padding:0; list-style:none; }
+.refs li { break-inside:avoid; margin-bottom:14px; padding-left:28px; text-indent:-28px; }
+
+/* ===========================================================
+   DECK CHROME (outside the stage)
+   =========================================================== */
+.progress { position:fixed; left:0; top:0; height:4px; background:linear-gradient(90deg, var(--straw), var(--bronze), var(--violet), var(--blue)); z-index:1001; transition:width .4s var(--ease); }
+.deck-controls { display:flex; align-items:center; gap:6px; padding:6px; border-radius:999px; background:color-mix(in srgb, var(--sheet) 90%, transparent); border:1px solid var(--rule); box-shadow:0 6px 24px rgba(0,0,0,.12); bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
+.deck-controls button { width:40px; height:40px; border-radius:50%; border:none; background:transparent; color:var(--ink); cursor:pointer; font-size:20px; display:grid; place-items:center; }
+.deck-controls button:hover { background:var(--rule); }
+.deck-controls .count { font-family:var(--f-mono); font-size:14px; color:var(--muted); padding:0 8px; font-variant-numeric:tabular-nums; min-width:70px; text-align:center; }
+
+/* ===========================================================
+   CHAPTER 3 ADDITIONS (same token system as Chapter 2)
+   =========================================================== */
+.sys { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:26px; }
+.sys .stage-col { display:flex; flex-direction:column; gap:12px; }
+.sys .stage-h { font-family:var(--f-mono); font-size:18px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); border-bottom:2px solid var(--ink); padding-bottom:8px; }
+.node { text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:14px 18px; display:flex; flex-direction:column; gap:4px; transition: opacity .25s, border-color .25s, box-shadow .25s; }
+.node b { font-family:var(--f-display); font-stretch:105%; font-size:24px; font-weight:650; }
+.node span { font-size:18px; color:var(--muted); line-height:1.35; }
+button.node { cursor:pointer; }
+button.node:hover { border-color:var(--bronze); }
+.sys.focus .node { opacity:.3; }
+.sys.focus .node.hit { opacity:1; border-color:var(--blue); box-shadow: inset 4px 0 0 var(--blue); }
+.sys.focus .node.src { opacity:1; border-color:var(--bronze); box-shadow: inset 4px 0 0 var(--bronze); }
+
+.sorter { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; }
+.fac { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:16px 18px; display:flex; flex-direction:column; gap:10px; }
+.fac .ft { font-size:22px; font-weight:500; line-height:1.3; }
+.fac .ft i { font-style:normal; font-family:var(--f-mono); color:var(--bronze); margin-right:8px; font-size:18px; }
+.fac .opts { display:flex; flex-wrap:wrap; gap:6px; }
+.fac .opts button { font-size:16px; padding:6px 10px; }
+.fac .opts button.right { background:var(--good); color:#fff; border-color:var(--good); }
+.fac .opts button.wrong { background:var(--bad); color:#fff; border-color:var(--bad); }
+.fac .fb { font-size:16px; color:var(--muted); min-height:22px; line-height:1.35; }
+.legend4 { display:flex; gap:26px; flex-wrap:wrap; font-size:20px; color:var(--muted); }
+.legend4 b { color:var(--ink); }
+
+.fix { border:1px dashed var(--bad); border-radius:6px; padding:16px 20px; display:flex; flex-direction:column; gap:8px; }
+.fix .was { font-family:var(--f-mono); font-size:20px; color:var(--bad); text-decoration:line-through; }
+.fix .now { font-family:var(--f-mono); font-size:24px; color:var(--good); }
+.formula { font-family:var(--f-mono); font-size:40px; font-weight:500; }
+.status { font-family:var(--f-mono); font-size:20px; padding:10px 14px; border-radius:4px; }
+.status.ok { background:color-mix(in srgb, var(--good) 15%, transparent); color:var(--good); }
+.status.no { background:color-mix(in srgb, var(--bad) 15%, transparent); color:var(--bad); }
+select.sel { font:inherit; font-size:21px; padding:8px 12px; border:1px solid var(--rule); border-radius:4px; background:var(--sheet); color:var(--ink); width:100%; }
+
+.coolrow { display:grid; grid-template-columns: 210px 1fr 1fr; gap:14px; align-items:center; padding:9px 0; border-bottom:1px solid var(--rule); font-size:20px; cursor:pointer; }
+.coolrow:hover .cname { color:var(--bronze); }
+.coolrow.on .cname { color:var(--bronze); font-weight:600; }
+.meter { height:12px; border-radius:6px; background:var(--rule); position:relative; overflow:hidden; }
+.meter i { position:absolute; inset:0 auto 0 0; border-radius:6px; }
+.coolhead { display:grid; grid-template-columns: 210px 1fr 1fr; gap:14px; font-family:var(--f-mono); font-size:16px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; padding-bottom:6px; border-bottom:2px solid var(--ink); }
+
+.chips { display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; }
+.chipcard { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; align-items:center; }
+.chipcard svg { width:150px; height:96px; }
+.chipcard .nm { font-size:19px; font-weight:500; text-align:center; }
+.chipcard .opts { display:flex; gap:6px; }
+.chipcard .opts button { font-size:15px; padding:5px 9px; }
+.chipcard .opts button.right { background:var(--good); color:#fff; border-color:var(--good); }
+.chipcard .opts button.wrong { background:var(--bad); color:#fff; border-color:var(--bad); }
+.chipcard .fb { font-size:15px; color:var(--muted); text-align:center; min-height:40px; line-height:1.3; }
+
+table.eval td:first-child { font-weight:500; }
+table.eval td.inst { font-family:var(--f-mono); font-size:18px; color:var(--blue); }
+
+/* ===========================================================
+   CHAPTER 4 ADDITIONS
+   =========================================================== */
+.ctrl { grid-template-columns: 200px 1fr 150px; }
+table.l9 { width:100%; border-collapse:collapse; font-family:var(--f-mono); font-size:19px; font-variant-numeric:tabular-nums; }
+table.l9 th, table.l9 td { padding:6px 10px; border-bottom:1px solid var(--rule); text-align:right; }
+table.l9 th { font-size:15px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+table.l9 td:first-child, table.l9 th:first-child { text-align:left; color:var(--muted); }
+table.l9 tr.hl td { background:color-mix(in srgb, var(--bronze) 14%, transparent); }
+table.l9 td.resp { color:var(--blue); }
+.lvl { display:grid; grid-template-columns: 110px repeat(3, 1fr); gap:8px; align-items:center; font-size:19px; }
+.lvl .lab { color:var(--muted); font-family:var(--f-mono); font-size:16px; }
+.lvl button { font-family:var(--f-mono); font-size:17px; padding:6px 8px; }
+.matrix { display:grid; grid-template-columns: 150px repeat(6, 1fr); gap:6px; }
+.matrix .mh { font-family:var(--f-mono); font-size:15px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; text-align:center; padding:6px 0; }
+.matrix .rh { font-family:var(--f-display); font-weight:650; font-size:23px; display:flex; align-items:center; }
+.cell { font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:5px; padding:10px 4px; text-align:center; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; transition:border-color .2s, background .2s; }
+.cell .ar { font-family:var(--f-mono); font-size:30px; line-height:1; }
+.cell .st { font-size:13px; color:var(--muted); }
+.cell:hover { border-color:var(--bronze); }
+.cell[aria-pressed="true"] { border-color:var(--ink); background:color-mix(in srgb, var(--straw) 16%, var(--sheet)); }
+.cell.up .ar { color:var(--bad); } .cell.dn .ar { color:var(--good); } .cell.mix .ar { color:var(--violet); } .cell.nil .ar { color:var(--muted); }
+.notice { border:2px solid var(--bad); border-radius:6px; padding:22px 26px; display:flex; flex-direction:column; gap:10px; background:color-mix(in srgb, var(--bad) 6%, var(--sheet)); }
+.notice .tag { font-family:var(--f-mono); font-size:18px; letter-spacing:.08em; text-transform:uppercase; color:var(--bad); }
+.check { display:flex; flex-direction:column; gap:10px; }
+.check label { display:flex; gap:14px; align-items:flex-start; font-size:21px; cursor:pointer; }
+.check input { width:24px; height:24px; accent-color:var(--good); margin-top:3px; flex:none; }
+.addcard { text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:14px 16px; cursor:pointer; display:flex; flex-direction:column; gap:4px; }
+.addcard b { font-family:var(--f-mono); font-size:30px; color:var(--bronze); }
+.addcard span { font-size:17px; color:var(--muted); }
+.addcard[aria-pressed="true"] { border-color:var(--ink); box-shadow: inset 0 -4px 0 var(--bronze); }
+.adds { display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; }
+.htgrid { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+.rank { display:flex; flex-direction:column; gap:8px; }
+.rank .rr { display:grid; grid-template-columns: 220px 1fr 1fr 1fr; gap:8px; align-items:center; font-size:19px; }
+.rank .rr .h { font-family:var(--f-mono); font-size:15px; color:var(--muted); text-transform:uppercase; text-align:center; }
+.pill { font-family:var(--f-mono); font-size:16px; padding:6px 8px; border-radius:4px; text-align:center; background:var(--rule); }
+.pill.p1 { background:var(--bad); color:#fff; } .pill.p2 { background:color-mix(in srgb, var(--bad) 45%, var(--sheet)); } .pill.p3 { background:var(--rule); color:var(--muted); }
+
+/* ===========================================================
+   CHAPTER 5 ADDITIONS
+   =========================================================== */
+.pipe { display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; }
+.step { position:relative; text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:16px 14px 14px; cursor:pointer; display:flex; flex-direction:column; gap:6px; min-height:150px; transition:border-color .2s; }
+.step .sn { font-family:var(--f-mono); font-size:16px; color:var(--bronze); }
+.step .st { font-family:var(--f-display); font-weight:650; font-size:22px; line-height:1.15; }
+.step .si { font-size:16px; color:var(--muted); line-height:1.3; }
+.step::after { content:"→"; position:absolute; right:-14px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:20px; z-index:2; }
+.step:last-child::after { content:""; }
+.step[aria-pressed="true"] { border-color:var(--ink); box-shadow: inset 0 -4px 0 var(--bronze); }
+.hot { cursor:pointer; transition: opacity .2s; }
+.hotwrap.focus .hot { opacity:.3; }
+.hotwrap.focus .hot.on { opacity:1; }
+.wcards { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+.wcard { text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:10px 12px; cursor:pointer; display:flex; gap:12px; align-items:center; }
+.wcard svg { width:84px; height:64px; flex:none; }
+.wcard b { font-family:var(--f-display); font-size:20px; font-weight:650; }
+.wcard[aria-pressed="true"] { border-color:var(--ink); box-shadow: inset 4px 0 0 var(--bronze); }
+.crit { display:flex; flex-direction:column; gap:8px; }
+.crit .ci { display:grid; grid-template-columns: 34px 1fr auto; gap:12px; align-items:center; padding:10px 14px; border:1px solid var(--rule); border-radius:5px; background:var(--sheet); font-size:21px; }
+.crit .ci .dot { width:22px; height:22px; border-radius:50%; background:var(--rule); }
+.crit .ci.hit { border-color:var(--bad); background:color-mix(in srgb, var(--bad) 10%, var(--sheet)); }
+.crit .ci.hit .dot { background:var(--bad); }
+.crit .ci .val { font-family:var(--f-mono); font-size:19px; }
+#micSvg { cursor:crosshair; }
+.tbl-sm { width:100%; border-collapse:collapse; font-size:19px; }
+.tbl-sm th, .tbl-sm td { padding:7px 10px; border-bottom:1px solid var(--rule); text-align:left; }
+.tbl-sm th { font-family:var(--f-mono); font-size:15px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.05em; }
+.tbl-sm td.m { font-family:var(--f-mono); font-variant-numeric:tabular-nums; }
+.tbl-sm tr.on td { background:color-mix(in srgb, var(--bronze) 14%, transparent); }
+.tbl-sm tr { cursor:pointer; }
+.methods { display:grid; grid-template-columns: repeat(2, 1fr); gap:14px; }
+.meth { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:16px 18px; display:flex; flex-direction:column; gap:8px; }
+.meth .mh { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.meth .mh b { font-family:var(--f-display); font-size:22px; font-weight:650; }
+.tags { display:flex; gap:6px; flex-wrap:wrap; }
+.tags span { font-family:var(--f-mono); font-size:14px; padding:3px 8px; border-radius:3px; background:var(--rule); color:var(--ink); }
+.tags span.g { background:color-mix(in srgb, var(--good) 22%, var(--sheet)); }
+.tags span.r { background:color-mix(in srgb, var(--bad) 18%, var(--sheet)); }
+.sheet2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px 30px; }
+</style>
+<div class="progress" id="progress" style="width:0"></div>
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+<!-- ======================= 1 · TITLE ======================= -->
+<section class="slide active visible" data-label="Title">
+  <div class="title-wrap">
+    <div class="title-left">
+      <div class="eyebrow reveal">Chapter 5 · Assessment of Machinability</div>
+      <h1 class="reveal">ISO 3685<span>tool-life testing with single-point turning tools</span></h1>
+      <div class="course reveal">
+        <div class="code">MMT15603</div>
+        <div class="meta">Faculty of Mechanical Engineering &amp; Technology, UniMAP<br>Test procedure · wear anatomy · tool-life criteria · from wear curves to Taylor's equation</div>
+      </div>
+    </div>
+    <div class="title-right">
+      <svg id="heroWear" viewBox="0 0 700 480" width="700" height="480" role="img" aria-label="Flank face of a worn insert showing wear zones C, B and N"></svg>
+      <p class="small">The flank face of a worn insert. ISO 3685 divides the worn edge into zones and defines exactly where and how wear is measured, so that tool-life results from different laboratories can be compared.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 2 · ROADMAP ======================= -->
+<section class="slide" data-label="Roadmap">
+  <aside class="rail"><span class="no">02</span><span class="lab">Roadmap</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">Where this chapter goes</div>
+      <h2>A tool-life number is only useful if everyone measured it the same way. ISO 3685 is that agreement.</h2>
+    </div>
+    <div class="outcomes reveal">
+      <div><span class="co">By the end you can</span>Describe the ISO 3685 test procedure, set-up and reference conditions.</div>
+      <div><span class="co">By the end you can</span>Identify wear zones and wear forms, and measure VB<sub>B</sub>, VB<sub>B max</sub> and KT correctly.</div>
+      <div><span class="co">By the end you can</span>Turn wear curves at four speeds into Taylor's n and C, and judge their reliability.</div>
+    </div>
+    <div class="roadmap reveal">
+      <button class="stop" data-go="2"><span class="n">03–05</span><span class="t">The standard and the test</span><span class="d">Scope, test pipeline, set-up anatomy, reference conditions.</span></button>
+      <button class="stop" data-go="5"><span class="n">06–07</span><span class="t">Wear anatomy</span><span class="d">Zones C, B, N; crater measures; nine wear forms.</span></button>
+      <button class="stop" data-go="7"><span class="n">08–09</span><span class="t">Criteria and measurement</span><span class="d">Which limit ends tool life; virtual microscope practice.</span></button>
+      <button class="stop" data-go="9"><span class="n">10–11</span><span class="t">From curves to Taylor</span><span class="d">Measurement intervals, four-speed regression.</span></button>
+      <button class="stop" data-go="11"><span class="n">12–14</span><span class="t">Reliability and practice</span><span class="d">Scatter, limits of the standard, measurement methods.</span></button>
+      <button class="stop" data-go="14"><span class="n">15–16</span><span class="t">Lab sheet and self-check</span><span class="d">What to record in the lab, six-question quiz.</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 3 · PIPELINE ======================= -->
+<section class="slide" data-label="Test procedure">
+  <aside class="rail"><span class="no">03</span><span class="lab">The test</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.1 · What ISO 3685 standardises</div>
+      <h2>Seven steps from a fresh insert to a tool-life equation. Click a step.</h2>
+    </div>
+    <div class="pipe reveal" id="pipe"></div>
+    <div class="grid-6-4" style="flex:none">
+      <div class="panel defbox reveal" id="pipeDef" aria-live="polite" style="min-height:280px"></div>
+      <div class="col reveal">
+        <div class="panel" style="display:flex;flex-direction:column;gap:8px">
+          <span class="eyebrow">Scope</span>
+          <p style="font-size:21px">Tool-life testing of single-point turning tools of high-speed steel, sintered carbide and ceramic, cutting steel and cast iron. It fixes work material, tool, conditions, wear measurement and evaluation so results are comparable.</p>
+        </div>
+        <p class="small">ISO 3685:1993 is the current edition. The steps here summarise the procedure; use the standard itself for the exact clauses.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 4 · SET-UP ANATOMY ======================= -->
+<section class="slide" data-label="Test set-up">
+  <aside class="rail"><span class="no">04</span><span class="lab">Set-up anatomy</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.2 · Anatomy of the test set-up</div>
+      <h2>Every part of the set-up can change the result. Click a component.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="panel reveal" style="padding:16px"><svg id="setSvg" class="hotwrap" viewBox="0 0 1000 600" width="100%" height="100%" role="img" aria-label="Lathe set-up for a tool-life test"></svg></div>
+      <div class="col reveal">
+        <div class="partlist" id="setList"></div>
+        <div class="panel defbox" id="setDef" aria-live="polite" style="min-height:300px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 5 · REFERENCE CONDITIONS ======================= -->
+<section class="slide" data-label="Reference conditions">
+  <aside class="rail"><span class="no">05</span><span class="lab">Reference conditions</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.3 · Reference tool and cutting conditions</div>
+      <h2>Fix everything except cutting speed, then vary speed only.</h2>
+    </div>
+    <div class="grid2">
+      <div class="col reveal">
+        <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+          <h3>Reference geometry · sintered carbide insert</h3>
+          <table class="tbl-sm">
+            <thead><tr><th>Symbol</th><th>Angle</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td class="m">γ<sub>o</sub></td><td>Rake angle</td><td class="m">6°</td></tr>
+              <tr><td class="m">α<sub>o</sub></td><td>Clearance angle</td><td class="m">5°</td></tr>
+              <tr><td class="m">λ<sub>s</sub></td><td>Inclination angle</td><td class="m">0°</td></tr>
+              <tr><td class="m">κ<sub>r</sub></td><td>Approach angle</td><td class="m">75°</td></tr>
+              <tr><td class="m">r<sub>ε</sub></td><td>Corner radius</td><td class="m">0.8 mm</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">Commonly quoted ISO 3685 reference values. Confirm against your copy of the standard before writing a test plan.</p>
+      </div>
+      <div class="col reveal">
+        <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>Feed / depth combinations</h3><span class="hint">click a row</span></div>
+          <table class="tbl-sm" id="condTab">
+            <thead><tr><th>Set</th><th>Feed f, mm/rev</th><th>Depth a<sub>p</sub>, mm</th><th>Use</th></tr></thead>
+            <tbody>
+              <tr data-f="0.1" data-a="1.0"><td class="m">A</td><td class="m">0.10</td><td class="m">1.0</td><td>finishing</td></tr>
+              <tr data-f="0.25" data-a="2.5"><td class="m">B</td><td class="m">0.25</td><td class="m">2.5</td><td>preferred, general</td></tr>
+              <tr data-f="0.4" data-a="2.5"><td class="m">C</td><td class="m">0.40</td><td class="m">2.5</td><td>medium roughing</td></tr>
+              <tr data-f="0.63" data-a="2.5"><td class="m">D</td><td class="m">0.63</td><td class="m">2.5</td><td>heavy roughing</td></tr>
+            </tbody>
+          </table>
+          <div class="ctrl"><label for="rcV">Cutting speed</label><input type="range" id="rcV" min="80" max="350" step="5" value="200"><output id="rcVo"></output></div>
+          <div class="readouts">
+            <div><span class="k">Chip thickness h</span><span class="v" id="rcH"></span><span class="u">mm · f·sin κ<sub>r</sub></span></div>
+            <div><span class="k">Removal rate Q</span><span class="v" id="rcQ"></span><span class="u">cm³/min</span></div>
+            <div><span class="k">Crater limit KT</span><span class="v" id="rcKT"></span><span class="u">mm · 0.06 + 0.3f</span></div>
+            <div><span class="k">Ratio a<sub>p</sub> / f</span><span class="v" id="rcR"></span><span class="u">chip shape</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 6 · WEAR ANATOMY ======================= -->
+<section class="slide" data-label="Wear anatomy">
+  <aside class="rail"><span class="no">06</span><span class="lab">Wear anatomy</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.4 · Anatomy of a worn insert</div>
+      <h2>Wear is measured in named zones and named dimensions. Click any one.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="panel reveal" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+        <div class="chiprow" id="waView"></div>
+        <svg id="waSvg" class="hotwrap" viewBox="0 0 1000 560" width="100%" height="100%" role="img" aria-label="Worn insert with ISO 3685 wear measures"></svg>
+      </div>
+      <div class="col reveal">
+        <div class="partlist" id="waList"></div>
+        <div class="panel defbox" id="waDef" aria-live="polite" style="min-height:280px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 7 · WEAR FORMS ======================= -->
+<section class="slide" data-label="Wear forms">
+  <aside class="rail"><span class="no">07</span><span class="lab">Wear forms</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.5 · Recognising the wear form</div>
+      <h2>Name the wear before you measure it: the form tells you the cause and the fix.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="wcards reveal" id="wcards"></div>
+      <div class="panel defbox reveal" id="wfDef" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 8 · CRITERIA ======================= -->
+<section class="slide" data-label="Tool-life criteria">
+  <aside class="rail"><span class="no">08</span><span class="lab">Criteria</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.6 · Tool-life criteria</div>
+      <h2>Tool life ends at whichever limit is reached first.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>Race to the limit · carbide insert</h3><span class="hint">illustrative wear curves</span></div>
+        <svg id="crSvg" viewBox="0 0 980 360" width="100%" height="360" role="img" aria-label="VB, VBmax and KT growth against time"></svg>
+        <div class="ctrl"><label for="crF">Feed f</label><input type="range" id="crF" min="0.1" max="0.63" step="0.01" value="0.25"><output id="crFo"></output></div>
+        <div class="ctrl"><label for="crS">Cutting speed</label><input type="range" id="crS" min="0" max="100" step="1" value="40"><output id="crSo"></output></div>
+        <div class="ctrl"><label for="crI">Wear irregularity</label><input type="range" id="crI" min="0" max="100" step="1" value="30"><output id="crIo"></output></div>
+      </div>
+      <div class="col reveal">
+        <div class="crit" id="crList"></div>
+        <p class="small" id="crTxt" aria-live="polite"></p>
+        <div class="panel" style="display:flex;flex-direction:column;gap:6px">
+          <span class="eyebrow">Criteria by tool material</span>
+          <p style="font-size:19px"><b>Sintered carbide:</b> VB<sub>B</sub> = 0.3 mm if wear is regular in zone B; VB<sub>B max</sub> = 0.6 mm if irregular; crater depth KT = 0.06 + 0.3f mm.</p>
+          <p style="font-size:19px"><b>HSS and ceramics:</b> catastrophic failure, or the same VB<sub>B</sub> / VB<sub>B max</sub> limits.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 9 · VIRTUAL MICROSCOPE ======================= -->
+<section class="slide" data-label="Virtual microscope">
+  <aside class="rail"><span class="no">09</span><span class="lab">Measure it</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.7 · Practice before the lab · toolmaker's microscope</div>
+      <h2>Click at least five points in zone B to measure VB<sub>B</sub>, then compare with the true value.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="panel reveal" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+        <svg id="micSvg" viewBox="0 0 1000 520" width="100%" height="100%" role="img" aria-label="Magnified flank face for measuring flank wear"></svg>
+        <div class="chiprow"><button class="chipbtn" id="micNew">New insert</button><button class="chipbtn" id="micClr">Clear points</button><button class="chipbtn" id="micAuto">Machine-vision scan (60 points)</button></div>
+      </div>
+      <div class="col reveal">
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div style="border-bottom:1px solid var(--rule)"><span class="k">Your VB<sub>B</sub></span><span class="v" id="micMine">–</span><span class="u" id="micN">0 points in zone B</span></div>
+          <div style="border-bottom:1px solid var(--rule);border-right:none"><span class="k">Your VB<sub>B max</sub></span><span class="v" id="micMax">–</span><span class="u">largest reading</span></div>
+          <div><span class="k">True VB<sub>B</sub></span><span class="v" id="micTrue">hidden</span><span class="u">zone B average</span></div>
+          <div style="border-right:none"><span class="k">Error</span><span class="v" id="micErr">–</span><span class="u">yours − true</span></div>
+        </div>
+        <div class="panel" id="micVerdict" style="font-size:21px" aria-live="polite">Measure from the original cutting edge (dashed line) to the bottom of the wear land, perpendicular to the edge.</div>
+        <ul class="list" style="font-size:20px">
+          <li>Points outside zone B are recorded but excluded, as the standard measures VB<sub>C</sub> and VB<sub>N</sub> separately.</li>
+          <li>A vision system that fitted the wear edge with a Hough transform measured flank wear within 0.04 mm of an optical microscope. <span class="cite">(Khoury et al., 2020)</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 10 · INTERVALS ======================= -->
+<section class="slide" data-label="Measurement intervals">
+  <aside class="rail"><span class="no">10</span><span class="lab">Wear curve</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.8 · Recording the wear curve</div>
+      <h2>Stop and measure often enough to catch the end of the steady-wear stage.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <svg id="ivSvg" viewBox="0 0 980 420" width="100%" height="420" role="img" aria-label="Wear curve sampled at intervals"></svg>
+        <div class="ctrl"><label for="ivD">Measuring interval</label><input type="range" id="ivD" min="1" max="12" step="0.5" value="5"><output id="ivDo"></output></div>
+      </div>
+      <div class="col reveal">
+        <div class="readouts" style="grid-template-columns:1fr 1fr 1fr">
+          <div><span class="k">True T</span><span class="v" id="ivT"></span><span class="u">min at VB<sub>B</sub> 0.3</span></div>
+          <div><span class="k">Interpolated T</span><span class="v" id="ivTi"></span><span class="u">from your points</span></div>
+          <div style="border-right:none"><span class="k">Error</span><span class="v" id="ivE"></span><span class="u">%</span></div>
+        </div>
+        <ul class="list" style="font-size:21px">
+          <li>T is read by linear interpolation between the last point below the criterion and the first point above it.</li>
+          <li>Each stop costs time and can disturb the cut, so shorten the interval as the curve steepens, not from the start.</li>
+          <li>Record the wear form at every stop, not only the number. A jump in VB can mean chipping, not wear.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 11 · TAYLOR ======================= -->
+<section class="slide" data-label="Taylor regression">
+  <aside class="rail"><span class="no">11</span><span class="lab">T–v<sub>c</sub> relation</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.9 · From four wear curves to Taylor's equation</div>
+      <h2>Read T at each speed, then fit a straight line on log–log axes.</h2>
+    </div>
+    <div class="grid2">
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:8px">
+        <h3>1 · Wear curves at four speeds</h3>
+        <svg id="tyCurves" viewBox="0 0 900 400" width="100%" height="330" role="img" aria-label="Wear curves at four cutting speeds"></svg>
+        <div class="ctrl"><label for="tyC">Criterion VB<sub>B</sub></label><input type="range" id="tyC" min="0.15" max="0.5" step="0.01" value="0.30"><output id="tyCo"></output></div>
+      </div>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:8px">
+        <h3>2 · log T against log v<sub>c</sub></h3>
+        <svg id="tyLog" viewBox="0 0 900 400" width="100%" height="330" role="img" aria-label="Taylor regression on log axes"></svg>
+        <div class="readouts" style="grid-template-columns:repeat(3,1fr)">
+          <div><span class="k">Exponent n</span><span class="v" id="tyN"></span><span class="u">slope = −1/n</span></div>
+          <div><span class="k">Constant C</span><span class="v" id="tyCC"></span><span class="u">v for T = 1 min</span></div>
+          <div style="border-right:none"><span class="k">R²</span><span class="v" id="tyR2"></span><span class="u">fit quality</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="small reveal">Example data generated for carbide on a C45-class steel at set B (f 0.25, a<sub>p</sub> 2.5), with realistic scatter; not measured values. Moving the criterion changes n and C, which is why every reported Taylor equation must state its criterion.</p>
+  </div>
+</section>
+
+<!-- ======================= 12 · SCATTER ======================= -->
+<section class="slide" data-label="Scatter">
+  <aside class="rail"><span class="no">12</span><span class="lab">Reliability</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.10 · Tool life is a distribution, not a number</div>
+      <h2>Identical inserts, identical conditions, different lives. Plan tool changes on the early failures.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <svg id="scSvg" viewBox="0 0 980 380" width="100%" height="380" role="img" aria-label="Histogram of simulated tool lives"></svg>
+        <div class="ctrl"><label for="scB">Weibull shape β</label><input type="range" id="scB" min="1.5" max="8" step="0.1" value="4"><output id="scBo"></output></div>
+        <div class="chiprow"><button class="chipbtn" id="scRun">Test 30 new inserts</button><span class="hint" style="align-self:center">mean life fixed at 20 min</span></div>
+      </div>
+      <div class="col reveal">
+        <div class="readouts" style="grid-template-columns:1fr 1fr 1fr">
+          <div><span class="k">Mean</span><span class="v" id="scM"></span><span class="u">min</span></div>
+          <div><span class="k">B10 life</span><span class="v" id="scB10"></span><span class="u">min · 10% failed</span></div>
+          <div style="border-right:none"><span class="k">CoV</span><span class="v" id="scCV"></span><span class="u">std / mean</span></div>
+        </div>
+        <ul class="list" style="font-size:21px">
+          <li>Serra &amp; Rmili ran ISO 3685 tests on thirty inserts from one production batch under strictly identical conditions to study wear development statistically. <span class="cite">(Serra &amp; Rmili, 2016)</span></li>
+          <li>The Weibull distribution is widely used for cutting-tool life and reliability. <span class="cite">(Yang et al., 2020, preprint)</span></li>
+          <li>A low shape β means wide scatter: changing tools at the mean life would let many fail in the cut.</li>
+        </ul>
+        <p class="small">Simulated samples. β values for real tools depend on tool, work material and wear mode.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 13 · LIMITS ======================= -->
+<section class="slide" data-label="Limits of the standard">
+  <aside class="rail"><span class="no">13</span><span class="lab">Critical view</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.11 · Where the standard is debated</div>
+      <h2>ISO 3685 makes results comparable. It does not make them universal.</h2>
+    </div>
+    <div class="evid reveal">
+      <div class="ev"><span class="what">Same T–v<sub>c</sub> treatment for all tool materials</span><p style="font-size:21px">Panda and Duplák argue the standard evaluates all tool materials with the same Taylor-based characteristics. Their ceramic-tool tests on C60 steel did not follow the standard's dependence.</p><span class="cite">Panda et al. (2013); Duplák et al. (2015)</span></div>
+      <div class="ev"><span class="what">Flank-wear criterion vs part quality</span><p style="font-size:21px">Basing tool life on the surface roughness the part needs, instead of a fixed VB, gave on average 23% longer tool life; VB at end of life ranged from 0.36 to 0.54 mm.</p><span class="cite">Iqbal et al. (2022)</span></div>
+      <div class="ev"><span class="what">Other operations, other limits</span><p style="font-size:21px">A milling study on Ti6Al4V set its wear limit at 0.2 mm and found each 1% rise in cutting speed cut tool life by about 4%. Criteria are chosen per process.</p><span class="cite">Tatar &amp; Sjöberg (2020)</span></div>
+      <div class="ev"><span class="what">Measuring needs the machine to stop</span><p style="font-size:21px">Direct optical measurement requires stopping and is time-consuming, which motivates monitoring flank wear through cutting-force signals.</p><span class="cite">Equeter et al. (2018)</span></div>
+    </div>
+    <p class="small reveal">Discussion: for a batch of aerospace parts with Ra ≤ 0.8 µm, would you end tool life at VB<sub>B</sub> = 0.3 mm or at a roughness limit? What evidence would you collect?</p>
+  </div>
+</section>
+
+<!-- ======================= 14 · METHODS ======================= -->
+<section class="slide" data-label="Measuring methods">
+  <aside class="rail"><span class="no">14</span><span class="lab">Measurement</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.12 · Ways to measure wear</div>
+      <h2>Direct methods measure the tool. Indirect methods infer it while cutting.</h2>
+    </div>
+    <div class="chiprow reveal" id="mFilt"></div>
+    <div class="methods reveal" id="methods"></div>
+  </div>
+</section>
+
+<!-- ======================= 15 · LAB SHEET ======================= -->
+<section class="slide" data-label="Lab record sheet">
+  <aside class="rail"><span class="no">15</span><span class="lab">Lab sheet</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">5.13 · Before you leave the lab</div>
+      <h2>A tool-life result without its conditions cannot be reused. Tick what you recorded.</h2>
+    </div>
+    <div class="grid-6-4">
+      <div class="panel check reveal sheet2" id="labSheet"></div>
+      <div class="col reveal">
+        <div class="readouts" style="grid-template-columns:1fr"><div style="border-right:none"><span class="k">Record completeness</span><span class="v" id="labPct">0%</span><span class="u" id="labMiss"></span></div></div>
+        <svg id="labBar" viewBox="0 0 600 40" width="100%" height="40" role="img" aria-label="Completeness bar"></svg>
+        <p class="small">The ticks are not saved; this is a working checklist for the tool-wear practical.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 16 · QUIZ ======================= -->
+<section class="slide" data-label="Self-check">
+  <aside class="rail"><span class="no">16</span><span class="lab">Self-check</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal">
+      <div class="eyebrow">Check your understanding</div>
+      <h2>Six questions. Pick an answer to see the reasoning.</h2>
+    </div>
+    <div class="quiz reveal" id="quiz"></div>
+    <div class="hint reveal" id="quizScore" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ======================= 17 · REFERENCES ======================= -->
+<section class="slide" data-label="References">
+  <aside class="rail"><span class="no">17</span><span class="lab">References</span><span class="temper"></span></aside>
+  <div class="frame" style="gap:24px">
+    <div class="head">
+      <div class="eyebrow">Sources · retrieved through scite</div>
+      <h2 style="font-size:56px">References</h2>
+    </div>
+    <ul class="refs" style="font-size:17px">
+      <li>ISO 3685:1993. <i>Tool-life testing with single-point turning tools.</i> International Organization for Standardization, Geneva.</li>
+      <li>Chen, T., Song, L., Li, S., et al. (2019). Experimental study on wear characteristics of PCBN tool with variable chamfered edge. <i>Chinese Journal of Mechanical Engineering, 32</i>. <a href="https://doi.org/10.1186/s10033-019-0351-9" target="_blank" rel="noopener">doi:10.1186/s10033-019-0351-9</a></li>
+      <li>Duplák, J., Panda, A., Kormoš, M., et al. (2015). Evaluation of T-vc dependence for the most commonly used cutting tools. <i>Key Engineering Materials, 669</i>, 311–318. <a href="https://doi.org/10.4028/www.scientific.net/KEM.669.311" target="_blank" rel="noopener">doi:10.4028/…/KEM.669.311</a></li>
+      <li>Equeter, L., Ducobu, F., Rivière-Lorphèvre, É., et al. (2018). Estimation of the influence of tool wear on force signals: A finite element approach in AISI 1045 orthogonal cutting. <i>AIP Conference Proceedings</i>. <a href="https://doi.org/10.1063/1.5034908" target="_blank" rel="noopener">doi:10.1063/1.5034908</a></li>
+      <li>Iqbal, A., Zhao, G., Cheok, Q., et al. (2022). Sustainable machining: Tool life criterion based on work surface quality. <i>Processes, 10</i>(6), 1087. <a href="https://doi.org/10.3390/pr10061087" target="_blank" rel="noopener">doi:10.3390/pr10061087</a></li>
+      <li>Khoury, J. K., Schueller, J. K., Pinto, F. A. C., et al. (2020). Monitoring of flank wear and damage on turning cutting tools by image processing. <i>The Journal of Engineering and Exact Sciences, 6</i>(2), 98–106. <a href="https://doi.org/10.18540/jcecvl6iss2pp0098-0106" target="_blank" rel="noopener">doi:10.18540/jcecvl6iss2pp0098-0106</a></li>
+      <li>Kiyota, H., Itoigawa, F., Hasegawa, Y., et al. (2013). Prevention of depth-of-cut notch wear by optimization of chamfer processing for tool edge in Inconel 718 cutting. <i>Proc. LEM21</i>, 273–276. <a href="https://doi.org/10.1299/jsmelem.2013.7.273" target="_blank" rel="noopener">doi:10.1299/jsmelem.2013.7.273</a></li>
+      <li>Minquiz, G. M., González-Sierra, N. E., Flores Méndez, J., et al. (2024). Analysis of wear mechanisms under cutting parameters: Influence of double layer TiAlN/TiN PVD and TiCN/Al₂O₃ CVD-coated tools on milling of AISI D2 steel. <i>Coatings, 14</i>(12), 1491. <a href="https://doi.org/10.3390/coatings14121491" target="_blank" rel="noopener">doi:10.3390/coatings14121491</a></li>
+      <li>Panda, A., Duplák, J., &amp; Jurko, J. (2013). The analysis of ceramic cutting tools durability in machining process of steel C60 applied according to standard ISO 3685. <i>Applied Mechanics and Materials, 275–277</i>, 2190–2194. <a href="https://doi.org/10.4028/www.scientific.net/AMM.275-277.2190" target="_blank" rel="noopener">doi:10.4028/…/AMM.275-277.2190</a></li>
+      <li>Sawangsri, W., &amp; Wattanasinbumrung, P. (2022). A model approach for in-process tool condition monitoring in CNC turning using machine vision. <i>IJIDeM, 16</i>(4), 1439–1456. <a href="https://doi.org/10.1007/s12008-022-01010-z" target="_blank" rel="noopener">doi:10.1007/s12008-022-01010-z</a></li>
+      <li>Serra, R., &amp; Rmili, W. (2016). Experimental evaluation of flank wear in dry turning from accelerometer data. <i>Int. J. Acoustics and Vibration, 21</i>(1). <a href="https://doi.org/10.20855/ijav.2016.21.1394" target="_blank" rel="noopener">doi:10.20855/ijav.2016.21.1394</a></li>
+      <li>Tatar, K., &amp; Sjöberg, S. (2020). Investigation of cutting conditions on tool life in shoulder milling of Ti6Al4V using PVD coated micro-grain carbide insert based on design of experiments. <i>Heliyon, 6</i>(6), e04217. <a href="https://doi.org/10.1016/j.heliyon.2020.e04217" target="_blank" rel="noopener">doi:10.1016/j.heliyon.2020.e04217</a></li>
+      <li>Thakre, A. A., Lad, A. V., Mala, K., et al. (2019). Measurements of tool wear parameters using machine vision system. <i>Modelling and Simulation in Engineering, 2019</i>, 1–9. <a href="https://doi.org/10.1155/2019/1876489" target="_blank" rel="noopener">doi:10.1155/2019/1876489</a></li>
+      <li>Xiao, M., He, N., Li, L., et al. (2011). Study on the machinability characteristics of superalloy K424 during high speed turning. <i>Advanced Materials Research, 188</i>, 636–641. <a href="https://doi.org/10.4028/www.scientific.net/AMR.188.636" target="_blank" rel="noopener">doi:10.4028/…/AMR.188.636</a></li>
+      <li>Yang, B., Guo, K., Feng, B., et al. (2020). Reliability assessment of cutting tools based on zero-failure data [Preprint]. <i>Research Square</i>. <a href="https://doi.org/10.21203/rs.3.rs-25508/v1" target="_blank" rel="noopener">doi:10.21203/rs.3.rs-25508/v1</a></li>
+    </ul>
+  </div>
+</section>
+
+</main>
+</div>
+<nav class="deck-controls" aria-label="Slide navigation">
+  <button id="prevBtn" aria-label="Previous slide">‹</button>
+  <span class="count" id="count">1 / 17</span>
+  <button id="nextBtn" aria-label="Next slide">›</button>
+  <button id="themeBtn" aria-label="Toggle light or dark theme" title="Theme">◐</button>
+</nav>
+<script>
+
+/* ===========================================================
+   SHARED HELPERS
+   =========================================================== */
+const NS = 'http://www.w3.org/2000/svg';
+const rad = d => d * Math.PI / 180;
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const txt = (parent, x, y, s, attrs = {}) => { const t = el('text', Object.assign({ x, y, 'font-size': 22, fill: 'var(--ink)' }, attrs), parent); t.textContent = s; return t; };
+const pts = arr => arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k];
+// arc centred on c, radius r, from angle a1 to a2 (degrees, SVG screen coords)
+const arcPath = (c, r, a1, a2) => {
+  const p1 = [c[0] + r * Math.cos(rad(a1)), c[1] + r * Math.sin(rad(a1))];
+  const p2 = [c[0] + r * Math.cos(rad(a2)), c[1] + r * Math.sin(rad(a2))];
+  const large = Math.abs(a2 - a1) > 180 ? 1 : 0, sweep = a2 > a1 ? 1 : 0;
+  return `M${p1[0]},${p1[1]} A${r},${r} 0 ${large} ${sweep} ${p2[0]},${p2[1]}`;
+};
+const bindRange = (id, fmt, cb) => {
+  const inp = document.getElementById(id), out = document.getElementById(id + 'o');
+  const run = () => { if (out) out.textContent = fmt(+inp.value); cb(); };
+  inp.addEventListener('input', run);
+  return run;
+};
+
+/* ===========================================================
+   LOG-LOG / LINEAR AXES HELPER
+   =========================================================== */
+function axes(svg, o) {
+  // o: {x0,y0,w,h, xmin,xmax,ymin,ymax, xlog,ylog, xlab,ylab, xticks,yticks}
+  const fx = v => o.x0 + (o.xlog ? (Math.log10(v) - Math.log10(o.xmin)) / (Math.log10(o.xmax) - Math.log10(o.xmin)) : (v - o.xmin) / (o.xmax - o.xmin)) * o.w;
+  const fy = v => o.y0 + o.h - (o.ylog ? (Math.log10(v) - Math.log10(o.ymin)) / (Math.log10(o.ymax) - Math.log10(o.ymin)) : (v - o.ymin) / (o.ymax - o.ymin)) * o.h;
+  (o.xticks || []).forEach(t => { const x = fx(t); el('line', { x1: x, y1: o.y0, x2: x, y2: o.y0 + o.h, stroke: 'var(--rule)', 'stroke-width': 1 }, svg); txt(svg, x, o.y0 + o.h + 24, String(t), { 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--muted)' }); });
+  (o.yticks || []).forEach(t => { const y = fy(t); el('line', { x1: o.x0, y1: y, x2: o.x0 + o.w, y2: y, stroke: 'var(--rule)', 'stroke-width': 1 }, svg); txt(svg, o.x0 - 10, y + 5, String(t), { 'text-anchor': 'end', 'font-size': 16, fill: 'var(--muted)' }); });
+  el('rect', { x: o.x0, y: o.y0, width: o.w, height: o.h, fill: 'none', stroke: 'var(--muted)', 'stroke-width': 1.2 }, svg);
+  if (o.xlab) txt(svg, o.x0 + o.w / 2, o.y0 + o.h + 50, o.xlab, { 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--muted)' });
+  if (o.ylab) { const t = txt(svg, 0, 0, o.ylab, { 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--muted)' }); t.setAttribute('transform', `translate(${o.x0 - 62} ${o.y0 + o.h / 2}) rotate(-90)`); }
+  return { fx, fy };
+}
+const clampLine = (svg, pts2, attrs) => el('polyline', Object.assign({ points: pts(pts2), fill: 'none' }, attrs), svg);
+
+/* ===========================================================
+   SHARED: ANATOMY HOTSPOTS + FLANK WEAR PROFILE
+   =========================================================== */
+function anatomy(svg, listEl, defEl, parts, first) {
+  const btns = {};
+  Object.entries(parts).forEach(([k, p]) => {
+    const b = document.createElement('button'); b.className = 'chipbtn'; b.innerHTML = p.name; b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => pick(k)); listEl.appendChild(b); btns[k] = b;
+  });
+  svg.querySelectorAll('.hot').forEach(h => { h.addEventListener('click', () => pick(h.dataset.k)); h.setAttribute('tabindex', '0'); h.addEventListener('keydown', e => { if (e.key === 'Enter') pick(h.dataset.k); }); });
+  function pick(k) {
+    svg.classList.add('focus');
+    svg.querySelectorAll('.hot').forEach(h => h.classList.toggle('on', h.dataset.k === k));
+    Object.entries(btns).forEach(([kk, b]) => b.setAttribute('aria-pressed', kk === k));
+    const p = parts[k];
+    defEl.innerHTML = `<span class="sym">${p.sym || ''}</span><h3>${p.name}</h3><p style="font-size:21px">${p.def}</p>${p.extra ? `<p class="small">${p.extra}</p>` : ''}`;
+  }
+  if (first) pick(first);
+  return pick;
+}
+// seeded random
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+// flank-wear profile across the active edge, u in [0,1]: 0 = nose, 1 = depth-of-cut line
+function makeProfile(seed, base = 0.28, notch = 0.55, irr = 0.04) {
+  const r = rng(seed), ph = [r() * 6, r() * 6, r() * 6], amp = [irr, irr * 0.6, irr * 0.4];
+  return u => {
+    let v = base + amp[0] * Math.sin(u * 9 + ph[0]) + amp[1] * Math.sin(u * 23 + ph[1]) + amp[2] * Math.sin(u * 51 + ph[2]);
+    if (u < 0.2) v += (0.2 - u) / 0.2 * 0.07;                         // nose zone C: slightly larger
+    if (u > 0.8) v += Math.exp(-Math.pow((u - 0.9) / 0.03, 2)) * (notch - base);   // notch zone N
+    return Math.max(0.02, v);
+  };
+}
+function drawFlank(svg, o) {
+  // o: {x0, x1, y0, S (px per mm), prof, zones:true, hot:true}
+  const { x0, x1, y0, S, prof } = o, W = x1 - x0;
+  el('rect', { x: x0 - 40, y: y0 - 4, width: W + 120, height: 330, fill: 'var(--tool)', rx: 6 }, svg);
+  // wear land
+  let d = `M${x0},${y0}`;
+  for (let i = 0; i <= 200; i++) { const u = i / 200; d += ` L${(x0 + u * W).toFixed(1)},${(y0 + prof(u) * S).toFixed(1)}`; }
+  d += ` L${x1},${y0} Z`;
+  el('path', { d, fill: 'var(--straw)', opacity: .92 }, svg);
+  // abrasion striations
+  for (let i = 0; i < 60; i++) { const u = i / 60 + 0.005, x = x0 + u * W; el('line', { x1: x, y1: y0 + 2, x2: x, y2: y0 + prof(u) * S - 3, stroke: 'var(--bronze)', 'stroke-width': 1, opacity: .45 }, svg); }
+  // original cutting edge
+  el('line', { x1: x0 - 40, y1: y0, x2: x1 + 80, y2: y0, stroke: 'var(--ink)', 'stroke-width': 2, 'stroke-dasharray': '10 6' }, svg);
+  if (o.zones) {
+    [[0, 0.2, 'C'], [0.2, 0.8, 'B'], [0.8, 1, 'N']].forEach(([a, b, z]) => {
+      const xa = x0 + a * W, xb = x0 + b * W;
+      el('line', { x1: xa, y1: y0 - 60, x2: xa, y2: y0 + 260, stroke: 'var(--sheet)', 'stroke-width': 1.5, 'stroke-dasharray': '4 6', opacity: .8 }, svg);
+      txt(svg, (xa + xb) / 2, y0 - 22, 'zone ' + z, { 'text-anchor': 'middle', 'font-size': 20, fill: 'var(--ink)', 'font-weight': 600 });
+    });
+    el('line', { x1: x1, y1: y0 - 60, x2: x1, y2: y0 + 260, stroke: 'var(--sheet)', 'stroke-width': 1.5, 'stroke-dasharray': '4 6', opacity: .8 }, svg);
+  }
+}
+
+/* ===========================================================
+   SLIDE 1 — HERO
+   =========================================================== */
+(function () {
+  const svg = document.getElementById('heroWear');
+  drawFlank(svg, { x0: 80, x1: 560, y0: 120, S: 300, prof: makeProfile(7), zones: true });
+  txt(svg, 80, 60, 'nose', { 'font-size': 16, fill: 'var(--muted)' });
+  txt(svg, 560, 60, 'depth-of-cut line', { 'font-size': 16, fill: 'var(--muted)', 'text-anchor': 'end' });
+  txt(svg, 80, 474, 'flank face · original edge dashed · wear land in straw', { 'font-size': 16, fill: 'var(--muted)' });
+})();
+
+/* ===========================================================
+   SLIDE 3 — TEST PIPELINE
+   =========================================================== */
+(function () {
+  const S = [
+    ['Specify', 'work, tool, conditions', 'Fix the work material and its hardness, the tool material, grade and reference geometry, feed, depth of cut and cutting fluid. Only cutting speed will vary between tests.', 'Use reference conditions (slide 05) or document every departure from them.'],
+    ['Prepare', 'machine and bar', 'Use a rigid, sufficiently powerful lathe. Remove the scaled or decarburised skin of the bar before testing, and check that hardness is uniform through the test diameter.', 'A soft skin or hard core changes the wear rate during the test.'],
+    ['Cut', 'constant cutting speed', 'Turn at a constant cutting speed. On a manual lathe this means stepping spindle speed up as diameter falls; on CNC use constant surface speed.', 'Track cumulative cutting time, not clock time.'],
+    ['Measure', 'stop at intervals', 'Stop, clean the insert without disturbing deposits, and measure flank wear and crater with a toolmaker\'s microscope. Note the wear form each time.', 'Shorten the interval as wear accelerates (slide 10).'],
+    ['Plot', 'wear vs time', 'Plot VB<sub>B</sub> (and KT if relevant) against cutting time for each speed. The curve shows break-in, steady and rapid wear.', 'Plot during the test so you know when to stop.'],
+    ['Read T', 'at the criterion', 'Tool life T is the cutting time to reach the chosen criterion, interpolated between measuring points, or the time to catastrophic failure.', 'Always state which criterion was used.'],
+    ['Fit', 'T–v<sub>c</sub> relation', 'Repeat at four or more cutting speeds and fit log T against log v<sub>c</sub> to obtain Taylor\'s n and C, with a measure of scatter.', 'Spread the speeds so tool lives cover roughly a decade.'],
+  ];
+  const box = document.getElementById('pipe'), def = document.getElementById('pipeDef');
+  const btns = S.map((s, i) => { const b = document.createElement('button'); b.className = 'step'; b.innerHTML = `<span class="sn">${String(i + 1).padStart(2, '0')}</span><span class="st">${s[0]}</span><span class="si">${s[1]}</span>`; b.addEventListener('click', () => pick(i)); box.appendChild(b); return b; });
+  function pick(i) { btns.forEach((b, j) => b.setAttribute('aria-pressed', i === j)); def.innerHTML = `<span class="sym">Step ${i + 1} of 7</span><h3>${S[i][0]} · ${S[i][1]}</h3><p style="font-size:22px">${S[i][2]}</p><p class="small">${S[i][3]}</p>`; }
+  pick(0);
+})();
+
+/* ===========================================================
+   SLIDE 4 — SET-UP ANATOMY
+   =========================================================== */
+(function () {
+  const svg = document.getElementById('setSvg');
+  const H = (k, tag, a) => el(tag, Object.assign({ class: 'hot', 'data-k': k }, a), svg);
+  // bed
+  el('rect', { x: 40, y: 430, width: 920, height: 40, fill: 'var(--muted)', opacity: .5, rx: 4 }, svg);
+  // headstock + chuck
+  H('chuck', 'rect', { x: 40, y: 170, width: 150, height: 260, fill: 'var(--tool)', rx: 6 });
+  H('chuck', 'rect', { x: 190, y: 200, width: 50, height: 160, fill: 'var(--muted)', rx: 4 });
+  // workpiece
+  H('work', 'rect', { x: 240, y: 230, width: 520, height: 100, fill: 'var(--work)', stroke: 'var(--ink)', 'stroke-width': 1.5 });
+  el('rect', { x: 560, y: 240, width: 200, height: 80, fill: 'var(--work)', opacity: .6 }, svg);
+  // tailstock
+  H('tail', 'polygon', { points: '760,280 800,250 800,310', fill: 'var(--muted)' });
+  H('tail', 'rect', { x: 800, y: 220, width: 140, height: 210, fill: 'var(--tool)', rx: 6 });
+  // tool post + holder + insert
+  H('holder', 'rect', { x: 520, y: 360, width: 160, height: 60, fill: 'var(--tool)', rx: 4 });
+  H('holder', 'rect', { x: 548, y: 335, width: 26, height: 40, fill: 'var(--muted)' });
+  H('insert', 'polygon', { points: '548,335 574,335 566,330 556,330', fill: 'var(--bronze)', stroke: 'var(--ink)' });
+  H('insert', 'circle', { cx: 561, cy: 332, r: 16, fill: 'none', stroke: 'var(--bronze)', 'stroke-width': 3 });
+  // chips
+  H('chip', 'path', { d: 'M565,330 C 600,300 640,320 620,350 S 580,380 610,395', stroke: 'var(--violet)', 'stroke-width': 6, fill: 'none', 'stroke-linecap': 'round' });
+  // coolant nozzle
+  H('fluid', 'path', { d: 'M470,120 L470,200 Q470,230 520,280', stroke: 'var(--blue)', 'stroke-width': 10, fill: 'none', 'stroke-linecap': 'round' });
+  H('fluid', 'path', { d: 'M525,285 l20,30 M535,282 l26,24 M515,290 l14,32', stroke: 'var(--blue)', 'stroke-width': 3 });
+  // microscope (off-machine)
+  H('scope', 'rect', { x: 820, y: 40, width: 120, height: 20, fill: 'var(--ink)', rx: 3 });
+  H('scope', 'rect', { x: 866, y: 60, width: 28, height: 70, fill: 'var(--muted)' });
+  H('scope', 'rect', { x: 846, y: 130, width: 68, height: 16, fill: 'var(--ink)' });
+  H('scope', 'rect', { x: 860, y: 4, width: 40, height: 36, fill: 'var(--muted)', rx: 4 });
+  // dynamometer under the holder
+  H('dyno', 'rect', { x: 520, y: 420, width: 160, height: 14, fill: 'var(--straw)' });
+  // labels
+  [['headstock & chuck', 70, 160], ['workpiece bar', 400, 220], ['tailstock', 820, 210], ['insert', 450, 345], ['holder & tool post', 600, 470], ['cutting fluid', 380, 115], ['microscope', 820, 170], ['chips', 640, 310]].forEach(([t, x, y]) => txt(svg, x, y, t, { 'font-size': 17, fill: 'var(--ink)' }));
+  txt(svg, 690, 450, '(optional dynamometer)', { 'font-size': 14, fill: 'var(--muted)' });
+  const P = {
+    work: { name: 'Workpiece bar', sym: 'reference work material', def: 'ISO 3685 uses reference work materials (a medium-carbon steel of the C45 class and grey cast iron) with specified hardness. Remove the skin, check hardness across the diameter, and keep the bar stiff enough not to deflect or chatter.', extra: 'Record: material grade, heat treatment, hardness, bar diameter and length.' },
+    chuck: { name: 'Headstock & chuck', sym: 'drive and clamping', def: 'Must deliver the power and torque for the heaviest test condition without stalling, and run true. Spindle speed is raised as the diameter falls to hold cutting speed constant.', extra: 'Record: machine model, power, how constant v<sub>c</sub> was maintained.' },
+    tail: { name: 'Tailstock', sym: 'support', def: 'Supports long bars so deflection and vibration do not change the effective depth of cut or cause premature chipping.' },
+    holder: { name: 'Holder & tool post', sym: 'ISO holder', def: 'Positions the insert to give the reference angles. Overhang should be short; the holder designation fixes approach angle κ<sub>r</sub> and the effective rake and clearance.', extra: 'Record: holder designation, overhang, centre-height setting.' },
+    insert: { name: 'Insert', sym: 'tool under test', def: 'One cutting edge per test, from the same batch where possible. The reference geometry for carbide is given on slide 05. Each corner used is identified so its wear history can be traced.', extra: 'Record: ISO insert designation, grade, coating, batch number, edge used.' },
+    chip: { name: 'Chips', sym: 'evidence', def: 'Chip form and colour tell you about temperature and chip control. Collect a sample at each speed; long, tangled chips can damage the edge and invalidate the test.' },
+    fluid: { name: 'Cutting fluid', sym: 'dry or specified', def: 'Tests are run dry or with a specified fluid at a stated concentration and flow. Changing the fluid changes the wear rate, so it is part of the test condition.' },
+    scope: { name: 'Toolmaker\'s microscope', sym: 'measurement', def: 'Measures VB<sub>B</sub>, VB<sub>B max</sub>, VB<sub>N</sub> and crater dimensions at each stop. Readings are taken perpendicular to the original cutting edge. Crater depth KT needs a depth gauge, profilometer or optical focus method.' },
+    dyno: { name: 'Dynamometer (optional)', sym: 'force monitoring', def: 'Not required by ISO 3685, but cutting-force signals track flank wear and can show when the tool is approaching its limit without stopping the cut (Equeter et al., 2018).' },
+  };
+  anatomy(svg, document.getElementById('setList'), document.getElementById('setDef'), P, 'work');
+})();
+
+/* ===========================================================
+   SLIDE 5 — REFERENCE CONDITIONS
+   =========================================================== */
+(function () {
+  const rows = [...document.querySelectorAll('#condTab tbody tr')];
+  let f = 0.25, a = 2.5;
+  const update = () => {
+    const v = +document.getElementById('rcV').value;
+    document.getElementById('rcH').textContent = (f * Math.sin(rad(75))).toFixed(3);
+    document.getElementById('rcQ').textContent = (v * f * a).toFixed(0);
+    document.getElementById('rcKT').textContent = (0.06 + 0.3 * f).toFixed(3);
+    document.getElementById('rcR').textContent = (a / f).toFixed(1);
+  };
+  rows.forEach(r => r.addEventListener('click', () => { rows.forEach(x => x.classList.toggle('on', x === r)); f = +r.dataset.f; a = +r.dataset.a; update(); }));
+  rows[1].classList.add('on');
+  bindRange('rcV', x => x + ' m/min', update)();
+})();
+
+/* ===========================================================
+   SLIDE 6 — WEAR ANATOMY
+   =========================================================== */
+(function () {
+  const svg = document.getElementById('waSvg'), list = document.getElementById('waList'), def = document.getElementById('waDef'), viewRow = document.getElementById('waView');
+  const prof = makeProfile(11, 0.27, 0.58, 0.035);
+  const P = {
+    flank: {
+      VBC: { name: 'VB<sub>C</sub> · zone C', sym: 'flank · nose', def: 'Flank wear width in zone C, the curved part of the cutting edge at the corner. It usually grows faster than zone B because the nose sees the thinnest chip and the most rubbing, and it controls the finished surface.' },
+      VBB: { name: 'VB<sub>B</sub> · zone B', sym: 'flank · average', def: 'Average flank wear width over zone B, the straight part of the active edge between the nose and the notch zone. This is the main tool-life measure when wear is regular: VB<sub>B</sub> = 0.3 mm for carbide.' },
+      VBBmax: { name: 'VB<sub>B max</sub>', sym: 'flank · maximum', def: 'The largest flank wear width in zone B. Used as the criterion (0.6 mm for carbide) when wear in zone B is irregular, scratched or chipped, so an average would hide the worst point.' },
+      VBN: { name: 'VB<sub>N</sub> · zone N', sym: 'flank · notch', def: 'Notch wear at the depth-of-cut line, where the edge meets the work-hardened surface layer and burrs. Severe in nickel alloys and stainless steels (Xiao et al., 2011; Kiyota et al., 2013).' },
+      edge: { name: 'Original cutting edge', sym: 'reference line', def: 'All flank-wear widths are measured perpendicular to the original edge position, not from the worn edge. Establish this line on the unworn part of the insert before measuring.' },
+    },
+    rake: {
+      KT: { name: 'KT · crater depth', sym: 'rake face', def: 'The maximum depth of the crater below the original rake face. Criterion for carbide: KT = 0.06 + 0.3f mm, so the allowed depth grows with feed. Driven by diffusion and high chip–tool temperature.' },
+      KB: { name: 'KB · crater width', sym: 'rake face', def: 'The distance from the original cutting edge to the far boundary of the crater, measured on the rake face.' },
+      KM: { name: 'KM · crater centre', sym: 'rake face', def: 'The distance from the original cutting edge to the deepest point of the crater.' },
+      KF: { name: 'KF · crater front', sym: 'rake face', def: 'The distance from the original cutting edge to the near (front) boundary of the crater. When KF reaches zero the crater breaks through the edge and the tool fails quickly.' },
+    },
+  };
+  let view = 'flank', pickFn;
+  function draw() {
+    svg.innerHTML = ''; list.innerHTML = ''; svg.classList.remove('focus');
+    if (view === 'flank') {
+      const x0 = 110, x1 = 860, y0 = 120, S = 520, W = x1 - x0;
+      drawFlank(svg, { x0, x1, y0, S, prof, zones: true });
+      const hot = (k, xA, xB) => { const g = el('g', { class: 'hot', 'data-k': k }, svg); el('rect', { x: xA, y: y0, width: xB - xA, height: 320, fill: 'transparent' }, g); return g; };
+      // VBC
+      let g = hot('VBC', x0, x0 + 0.2 * W); el('line', { x1: x0 + 0.1 * W, y1: y0, x2: x0 + 0.1 * W, y2: y0 + prof(0.1) * S, stroke: 'var(--blue)', 'stroke-width': 4 }, g); txt(g, x0 + 0.1 * W + 8, y0 + prof(0.1) * S + 26, 'VB_C', { 'font-size': 18, fill: 'var(--paper)', 'font-weight': 600 });
+      // VBB average
+      let s = 0, mx = 0, umx = 0.2; for (let i = 0; i <= 120; i++) { const u = 0.2 + 0.6 * i / 120, v = prof(u); s += v; if (v > mx) { mx = v; umx = u; } } const avg = s / 121;
+      g = hot('VBB', x0 + 0.2 * W, x0 + 0.8 * W); el('line', { x1: x0 + 0.2 * W, y1: y0 + avg * S, x2: x0 + 0.8 * W, y2: y0 + avg * S, stroke: 'var(--good)', 'stroke-width': 3, 'stroke-dasharray': '8 5' }, g); txt(g, x0 + 0.45 * W, y0 + avg * S + 26, `VB_B (avg) ${avg.toFixed(2)} mm`, { 'font-size': 18, fill: 'var(--paper)', 'font-weight': 600 });
+      g = el('g', { class: 'hot', 'data-k': 'VBBmax' }, svg); el('line', { x1: x0 + umx * W, y1: y0, x2: x0 + umx * W, y2: y0 + mx * S, stroke: 'var(--bad)', 'stroke-width': 4 }, g); el('circle', { cx: x0 + umx * W, cy: y0 + mx * S, r: 7, fill: 'var(--bad)' }, g); txt(g, x0 + umx * W + 10, y0 + mx * S + 40, `VB_B max ${mx.toFixed(2)}`, { 'font-size': 18, fill: 'var(--paper)', 'font-weight': 600 });
+      g = hot('VBN', x0 + 0.8 * W, x1); el('line', { x1: x0 + 0.9 * W, y1: y0, x2: x0 + 0.9 * W, y2: y0 + prof(0.9) * S, stroke: 'var(--violet)', 'stroke-width': 4 }, g); txt(g, x0 + 0.9 * W - 50, y0 + prof(0.9) * S + 26, 'VB_N', { 'font-size': 18, fill: 'var(--paper)', 'font-weight': 600 });
+      g = el('g', { class: 'hot', 'data-k': 'edge' }, svg); el('rect', { x: x0 - 40, y: y0 - 10, width: W + 120, height: 20, fill: 'transparent' }, g); txt(g, x1 + 10, y0 - 14, 'original edge', { 'font-size': 16, fill: 'var(--ink)' });
+      txt(svg, x0, 540, 'Flank face, magnified · nose at left, depth-of-cut line at right', { 'font-size': 16, fill: 'var(--muted)' });
+    } else {
+      // rake-face section through the crater
+      const x0 = 120, y0 = 160, S = 900;  // px per mm horizontally (section)
+      const f = 0.25, KF = 0.12, KM = 0.32, KB = 0.55, KT = 0.11;
+      const VS = 1400;
+      el('rect', { x: x0, y: y0, width: 780, height: 260, fill: 'var(--tool)' }, svg);
+      let d = `M${x0 + KF * S},${y0}`; for (let i = 0; i <= 60; i++) { const xx = KF + (KB - KF) * i / 60; const t = (xx - KF) / (KB - KF); const depth = KT * Math.sin(Math.PI * Math.pow(t, 0.8)); d += ` L${x0 + xx * S},${y0 + depth * VS}`; } d += ' Z';
+      el('path', { d, fill: 'var(--paper)' }, svg);
+      el('line', { x1: x0 - 30, y1: y0, x2: x0 + 800, y2: y0, stroke: 'var(--ink)', 'stroke-width': 2, 'stroke-dasharray': '10 6' }, svg);
+      txt(svg, x0 - 20, y0 - 50, 'cutting edge', { 'font-size': 16, fill: 'var(--ink)' });
+      el('line', { x1: x0, y1: y0 - 40, x2: x0, y2: y0 + 260, stroke: 'var(--ink)', 'stroke-width': 2 }, svg);
+      const dimH = (k, xa, xb, y, lab, col) => { const g = el('g', { class: 'hot', 'data-k': k }, svg); el('line', { x1: xa, y1: y, x2: xb, y2: y, stroke: col, 'stroke-width': 3 }, g); el('line', { x1: xb, y1: y - 8, x2: xb, y2: y + 8, stroke: col, 'stroke-width': 3 }, g); el('rect', { x: xa, y: y - 14, width: xb - xa, height: 28, fill: 'transparent' }, g); txt(g, xb + 8, y + 6, lab, { 'font-size': 18, fill: col, 'font-weight': 600 }); };
+      dimH('KF', x0, x0 + KF * S, y0 - 20, 'KF', 'var(--good)');
+      dimH('KM', x0, x0 + KM * S, y0 - 50, 'KM', 'var(--violet)');
+      dimH('KB', x0, x0 + KB * S, y0 - 80, 'KB', 'var(--blue)');
+      const xk = x0 + KM * S, g = el('g', { class: 'hot', 'data-k': 'KT' }, svg);
+      el('line', { x1: xk, y1: y0, x2: xk, y2: y0 + KT * VS, stroke: 'var(--bad)', 'stroke-width': 4 }, g); el('rect', { x: xk - 14, y: y0, width: 28, height: KT * VS, fill: 'transparent' }, g); txt(g, xk + 10, y0 + KT * VS + 26, 'KT', { 'font-size': 20, fill: 'var(--bad)', 'font-weight': 700 });
+      txt(svg, x0, 470, `Section through the rake face (depth exaggerated) · example f = ${f} mm/rev → KT limit ${(0.06 + 0.3 * f).toFixed(3)} mm`, { 'font-size': 16, fill: 'var(--muted)' });
+      txt(svg, x0 + 400, y0 + 220, 'tool', { 'font-size': 18, fill: 'var(--paper)' });
+    }
+    pickFn = anatomy(svg, list, def, P[view], view === 'flank' ? 'VBB' : 'KT');
+  }
+  [['flank', 'Flank face'], ['rake', 'Rake face (crater)']].forEach(([k, l]) => { const b = document.createElement('button'); b.className = 'chipbtn'; b.textContent = l; b.setAttribute('aria-pressed', k === view); b.addEventListener('click', () => { view = k; viewRow.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); }); viewRow.appendChild(b); });
+  draw();
+})();
+
+/* ===========================================================
+   SLIDE 7 — WEAR FORMS
+   =========================================================== */
+(function () {
+  const W = [
+    ['Flank wear', 'abrasion', 'Hard particles in the work abrade the clearance face. Gradual and predictable, the preferred mode for tool-life tests.', 'Raise wear resistance (coated grade), lower speed slightly.', 'flank'],
+    ['Crater wear', 'diffusion, temperature', 'A hollow forms on the rake face where the chip is hottest. Coatings partially block diffusion; deep craters weaken the edge. In PCBN hard turning, crater wear began at the chamfer and spread toward the edge (Chen et al., 2019).', 'Lower speed, Al₂O₃-coated grade, positive geometry.', 'crater'],
+    ['Notch wear', 'work-hardened layer, burrs', 'Localised wear at the depth-of-cut line. Hardened burrs and secondary chips knock the edge (Kiyota et al., 2013); ceramic tools on superalloy K424 were limited by nose and notch wear (Xiao et al., 2011).', 'Vary depth of cut between passes, round inserts, smaller approach angle.', 'notch'],
+    ['Nose wear', 'rubbing at the corner', 'Wear concentrated in zone C. It directly worsens surface finish and size because the nose generates the machined surface.', 'Larger nose radius, more wear-resistant grade.', 'nose'],
+    ['Chipping', 'mechanical overload', 'Small fragments break from the edge. Often from interrupted cuts, vibration or a too-sharp edge. Gives a sudden jump in VB readings.', 'Tougher grade, honed or chamfered edge, more rigid set-up.', 'chip'],
+    ['Plastic deformation', 'heat + pressure', 'The edge sags or bulges when it softens under high temperature and stress, changing the geometry. Common at high speed and feed on hard work.', 'Harder grade with better hot hardness, lower speed or feed.', 'plastic'],
+    ['Built-up edge', 'adhesion', 'Work material welds to the edge at low speed, then breaks away, pulling tool material with it. CVD tools on D2 steel showed BUE and chipping (Minquiz et al., 2024).', 'Raise speed, sharper positive edge, smoother coating, fluid.', 'bue'],
+    ['Thermal cracks', 'thermal cycling', 'Comb-like cracks perpendicular to the edge from repeated heating and cooling, typical of interrupted cutting and on/off coolant.', 'Run dry or with steady flood coolant, tougher grade.', 'crack'],
+    ['Fracture', 'catastrophic', 'Breakage of a large part of the edge. Ends tool life immediately and is itself a tool-life criterion for HSS and ceramics.', 'Reduce feed, check set-up rigidity, change tool before rapid-wear stage.', 'frac'],
+  ];
+  const icon = (svg, k) => {
+    el('polygon', { points: '6,10 78,10 78,58 6,58', fill: 'var(--tool)' }, svg);
+    el('line', { x1: 6, y1: 10, x2: 78, y2: 10, stroke: 'var(--ink)', 'stroke-width': 2 }, svg);
+    const S = { fill: 'var(--straw)' };
+    if (k === 'flank') el('rect', Object.assign({ x: 12, y: 10, width: 60, height: 12 }, S), svg);
+    if (k === 'crater') el('ellipse', { cx: 42, cy: 30, rx: 22, ry: 9, fill: 'var(--paper)' }, svg);
+    if (k === 'notch') { el('rect', Object.assign({ x: 12, y: 10, width: 60, height: 8 }, S), svg); el('polygon', Object.assign({ points: '62,10 72,10 68,34' }, S), svg); }
+    if (k === 'nose') el('path', Object.assign({ d: 'M6,10 L26,10 Q22,30 6,32 Z' }, S), svg);
+    if (k === 'chip') el('path', { d: 'M20,10 l6,8 l6,-8 M44,10 l4,6 l5,-6', fill: 'var(--paper)', stroke: 'var(--bad)', 'stroke-width': 2 }, svg);
+    if (k === 'plastic') el('path', { d: 'M6,10 Q42,26 78,10', fill: 'none', stroke: 'var(--bad)', 'stroke-width': 3 }, svg);
+    if (k === 'bue') el('path', { d: 'M30,10 q6,-10 14,-6 q6,4 0,6 Z', fill: 'var(--straw)', stroke: 'var(--ink)' }, svg);
+    if (k === 'crack') for (let i = 0; i < 6; i++) el('line', { x1: 14 + i * 11, y1: 10, x2: 14 + i * 11, y2: 26, stroke: 'var(--bad)', 'stroke-width': 1.5 }, svg);
+    if (k === 'frac') el('polygon', { points: '40,10 78,10 78,40', fill: 'var(--paper)', stroke: 'var(--bad)', 'stroke-width': 2 }, svg);
+  };
+  const box = document.getElementById('wcards'), def = document.getElementById('wfDef');
+  const btns = W.map((w, i) => { const b = document.createElement('button'); b.className = 'wcard'; b.innerHTML = `<svg viewBox="0 0 84 64" aria-hidden="true"></svg><div><b>${w[0]}</b><div class="small" style="font-size:15px">${w[1]}</div></div>`; icon(b.querySelector('svg'), w[4]); b.addEventListener('click', () => pick(i)); box.appendChild(b); return b; });
+  function pick(i) { btns.forEach((b, j) => b.setAttribute('aria-pressed', i === j)); const w = W[i]; def.innerHTML = `<span class="sym">mechanism · ${w[1]}</span><h3>${w[0]}</h3><p style="font-size:21px">${w[2]}</p><p style="font-size:20px"><b>Typical remedy:</b> ${w[3]}</p>`; }
+  pick(0);
+})();
+
+/* ===========================================================
+   SLIDE 8 — CRITERIA RACE
+   =========================================================== */
+(function () {
+  const svg = document.getElementById('crSvg'), list = document.getElementById('crList');
+  const base = t => 0.08 * (1 - Math.exp(-t / 1.5)) + 0.006 * t + 0.002 * Math.exp((t - 30) / 4);
+  const update = () => {
+    const f = +document.getElementById('crF').value, s = +document.getElementById('crS').value / 100, irr = +document.getElementById('crI').value / 100;
+    document.getElementById('crSo').textContent = s < .33 ? 'low' : s < .66 ? 'medium' : 'high';
+    document.getElementById('crIo').textContent = irr < .33 ? 'regular' : irr < .66 ? 'some' : 'irregular';
+    const k = Math.pow(1 + s, 3.2);                      // speed accelerates wear
+    const VB = t => base(t * k);
+    const VBmax = t => VB(t) * (1.12 + 1.3 * irr);
+    const KTlim = 0.06 + 0.3 * f;
+    const KT = t => 0.0009 * Math.pow(t * k, 1.25) * (0.6 + 2.2 * s * s) * (0.25 / Math.max(f, 0.1)) ** 0.3;
+    const solve = (fn, lim) => { let a = 0, b = 400; if (fn(b) < lim) return Infinity; for (let i = 0; i < 60; i++) { const m = (a + b) / 2; fn(m) < lim ? a = m : b = m; } return a; };
+    const C = [
+      ['VB<sub>B</sub> avg reaches 0.3 mm', solve(VB, 0.3), 'regular', irr < 0.5],
+      ['VB<sub>B max</sub> reaches 0.6 mm', solve(VBmax, 0.6), 'irregular', true],
+      [`KT reaches ${KTlim.toFixed(3)} mm`, solve(KT, KTlim), 'crater', true],
+    ];
+    const valid = C.filter(c => c[3]);
+    const first = valid.reduce((p, c) => c[1] < p[1] ? c : p);
+    list.innerHTML = C.map(c => `<div class="ci ${c === first ? 'hit' : ''}" style="${c[3] ? '' : 'opacity:.4'}"><span class="dot"></span><span>${c[0]}${c[3] ? '' : ' <span class="small">(not used: wear irregular)</span>'}</span><span class="val">${isFinite(c[1]) ? c[1].toFixed(1) + ' min' : '> 400'}</span></div>`).join('');
+    document.getElementById('crTxt').innerHTML = `Tool life T = <b>${first[1].toFixed(1)} min</b>, ended by ${first[0].replace(/<[^>]+>/g, '')}. ${irr >= 0.5 ? 'Because wear is irregular, the average VB<sub>B</sub> criterion is replaced by VB<sub>B max</sub>.' : ''}`;
+    svg.innerHTML = '';
+    const tmax = Math.min(400, Math.max(10, first[1] * 1.5));
+    const ax = axes(svg, { x0: 80, y0: 14, w: 520, h: 290, xmin: 0, xmax: tmax, ymin: 0, ymax: 0.8, xticks: [0, +(tmax / 2).toFixed(0), +tmax.toFixed(0)], yticks: [0, 0.3, 0.6], xlab: 'cutting time, min', ylab: 'flank wear, mm' });
+    const curve = (fn, col, dash, scale = 1, axo = ax) => { const p = []; for (let i = 0; i <= 160; i++) { const t = tmax * i / 160, v = fn(t) * scale; if (v > 0.8 * (scale === 1 ? 1 : 1)) break; p.push([axo.fx(t), axo.fy(v)]); } el('polyline', { points: pts(p), fill: 'none', stroke: col, 'stroke-width': 4, 'stroke-dasharray': dash || '' }, svg); };
+    [[0.3, 'var(--good)'], [0.6, 'var(--bad)']].forEach(([y, c]) => el('line', { x1: 80, y1: ax.fy(y), x2: 600, y2: ax.fy(y), stroke: c, 'stroke-dasharray': '6 6' }, svg));
+    curve(VB, 'var(--good)'); curve(VBmax, 'var(--bad)', '10 6');
+    // KT on its own axis
+    const ax2 = axes(svg, { x0: 700, y0: 14, w: 240, h: 290, xmin: 0, xmax: tmax, ymin: 0, ymax: 0.3, xticks: [0, +tmax.toFixed(0)], yticks: [0, 0.1, 0.2, 0.3], xlab: 'time, min', ylab: 'KT, mm' });
+    el('line', { x1: 700, y1: ax2.fy(KTlim), x2: 940, y2: ax2.fy(KTlim), stroke: 'var(--violet)', 'stroke-dasharray': '6 6' }, svg);
+    const p = []; for (let i = 0; i <= 160; i++) { const t = tmax * i / 160, v = KT(t); if (v > 0.3) break; p.push([ax2.fx(t), ax2.fy(v)]); } el('polyline', { points: pts(p), fill: 'none', stroke: 'var(--violet)', 'stroke-width': 4 }, svg);
+    if (isFinite(first[1])) el('line', { x1: ax.fx(first[1]), y1: 14, x2: ax.fx(first[1]), y2: 304, stroke: 'var(--ink)', 'stroke-width': 2 }, svg);
+    txt(svg, 90, 34, '— VB_B avg   - - VB_B max', { 'font-size': 15, fill: 'var(--muted)' });
+  };
+  bindRange('crF', x => x.toFixed(2) + ' mm', update);
+  bindRange('crS', () => '', update);
+  bindRange('crI', () => '', update)();
+  document.getElementById('crF').dispatchEvent(new Event('input'));
+})();
+
+/* ===========================================================
+   SLIDE 9 — VIRTUAL MICROSCOPE
+   =========================================================== */
+(function () {
+  const svg = document.getElementById('micSvg');
+  const x0 = 70, x1 = 820, y0 = 110, S = 560, W = x1 - x0;
+  let seed = 21, prof, pts2 = [], revealed = false;
+  const trueStats = () => { let s = 0, m = 0; for (let i = 0; i <= 400; i++) { const v = prof(0.2 + 0.6 * i / 400); s += v; m = Math.max(m, v); } return [s / 401, m]; };
+  function draw() {
+    svg.innerHTML = '';
+    drawFlank(svg, { x0, x1, y0, S, prof, zones: true });
+    // reticle scale
+    for (let i = 0; i <= 6; i++) { const y = y0 + i * 0.1 * S; el('line', { x1: x1 + 90, y1: y, x2: x1 + (i % 5 === 0 ? 130 : 115), y2: y, stroke: 'var(--ink)', 'stroke-width': 2 }, svg); txt(svg, x1 + 138, y + 6, (i * 0.1).toFixed(1), { 'font-size': 15, fill: 'var(--ink)' }); }
+    txt(svg, x1 + 92, y0 - 20, 'reticle, mm', { 'font-size': 15, fill: 'var(--ink)' });
+    pts2.forEach(p => {
+      const inB = p.u >= 0.2 && p.u <= 0.8, x = x0 + p.u * W, v = prof(p.u);
+      el('line', { x1: x, y1: y0, x2: x, y2: y0 + v * S, stroke: inB ? 'var(--blue)' : 'var(--muted)', 'stroke-width': p.auto ? 1.5 : 3 }, svg);
+      if (!p.auto) { el('circle', { cx: x, cy: y0 + v * S, r: 6, fill: inB ? 'var(--blue)' : 'var(--muted)', stroke: 'var(--sheet)', 'stroke-width': 2 }, svg); txt(svg, x + 6, y0 + v * S + 24, v.toFixed(3), { 'font-size': 14, fill: 'var(--paper)' }); }
+    });
+    txt(svg, x0, 500, 'Click on the flank face to place a measurement line', { 'font-size': 16, fill: 'var(--ink)' });
+    const inB = pts2.filter(p => p.u >= 0.2 && p.u <= 0.8).map(p => prof(p.u));
+    document.getElementById('micN').textContent = `${inB.length} points in zone B`;
+    const [tA, tM] = trueStats();
+    if (inB.length) {
+      const m = inB.reduce((s, v) => s + v, 0) / inB.length;
+      document.getElementById('micMine').textContent = m.toFixed(3);
+      document.getElementById('micMax').textContent = Math.max(...inB).toFixed(3);
+      if (inB.length >= 5) {
+        revealed = true;
+        document.getElementById('micTrue').textContent = tA.toFixed(3);
+        const e = m - tA; document.getElementById('micErr').textContent = (e >= 0 ? '+' : '') + e.toFixed(3);
+        const ok = Math.abs(e) <= 0.02;
+        document.getElementById('micVerdict').innerHTML = `${ok ? '<b style="color:var(--good)">Within ±0.02 mm.</b>' : '<b style="color:var(--bad)">Outside ±0.02 mm.</b>'} True VB<sub>B max</sub> is ${tM.toFixed(3)} mm. ${tA >= 0.3 ? 'This insert has reached the 0.3 mm criterion.' : 'This insert has not yet reached 0.3 mm.'} ${tM / tA > 1.6 ? 'Wear is irregular here: report VB<sub>B max</sub> as well.' : ''}`;
+      }
+    } else { ['micMine', 'micMax', 'micErr'].forEach(id => document.getElementById(id).textContent = '–'); document.getElementById('micTrue').textContent = 'hidden'; }
+  }
+  function fresh() { seed += 7; prof = makeProfile(seed, 0.22 + rng(seed)() * 0.14, 0.45 + rng(seed + 1)() * 0.2, 0.025 + rng(seed + 2)() * 0.03); pts2 = []; document.getElementById('micVerdict').textContent = 'Measure from the original cutting edge (dashed line) to the bottom of the wear land, perpendicular to the edge.'; draw(); }
+  svg.addEventListener('click', e => {
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    if (p.x < x0 || p.x > x1 || p.y < y0 - 20 || p.y > y0 + 330) return;
+    pts2.push({ u: (p.x - x0) / W }); draw();
+  });
+  document.getElementById('micNew').addEventListener('click', fresh);
+  document.getElementById('micClr').addEventListener('click', () => { pts2 = []; draw(); });
+  document.getElementById('micAuto').addEventListener('click', () => { pts2 = pts2.filter(p => !p.auto); for (let i = 0; i < 60; i++) pts2.push({ u: 0.2 + 0.6 * (i + 0.5) / 60, auto: true }); draw(); });
+  fresh();
+})();
+
+/* ===========================================================
+   SLIDE 10 — MEASURING INTERVAL
+   =========================================================== */
+(function () {
+  const svg = document.getElementById('ivSvg');
+  const VB = t => 0.07 * (1 - Math.exp(-t / 1.2)) + 0.0055 * t + 0.0025 * Math.exp((t - 34) / 3.6);
+  const solve = lim => { let a = 0, b = 80; for (let i = 0; i < 60; i++) { const m = (a + b) / 2; VB(m) < lim ? a = m : b = m; } return a; };
+  const Tt = solve(0.3);
+  const update = () => {
+    const d = +document.getElementById('ivD').value;
+    const samp = []; for (let t = 0; t <= 60; t += d) { samp.push([t, VB(t)]); if (VB(t) > 0.45) break; }
+    let Ti = NaN; for (let i = 1; i < samp.length; i++) if (samp[i - 1][1] < 0.3 && samp[i][1] >= 0.3) { const [ta, va] = samp[i - 1], [tb, vb] = samp[i]; Ti = ta + (0.3 - va) * (tb - ta) / (vb - va); break; }
+    document.getElementById('ivT').textContent = Tt.toFixed(1);
+    document.getElementById('ivTi').textContent = isNaN(Ti) ? '–' : Ti.toFixed(1);
+    const e = (Ti - Tt) / Tt * 100; const ee = document.getElementById('ivE'); ee.textContent = isNaN(e) ? '–' : (e >= 0 ? '+' : '') + e.toFixed(1); ee.style.color = Math.abs(e) > 5 ? 'var(--bad)' : 'var(--good)';
+    svg.innerHTML = '';
+    const ax = axes(svg, { x0: 90, y0: 14, w: 860, h: 330, xmin: 0, xmax: 50, ymin: 0, ymax: 0.5, xticks: [0, 10, 20, 30, 40, 50], yticks: [0, 0.1, 0.2, 0.3, 0.4, 0.5], xlab: 'cutting time, min', ylab: 'VB_B, mm' });
+    const c = []; for (let t = 0; t <= 50; t += 0.2) { const v = VB(t); if (v > 0.5) break; c.push([ax.fx(t), ax.fy(v)]); }
+    el('polyline', { points: pts(c), fill: 'none', stroke: 'var(--rule)', 'stroke-width': 6 }, svg);
+    el('polyline', { points: pts(samp.filter(s => s[1] <= 0.5).map(([t, v]) => [ax.fx(t), ax.fy(v)])), fill: 'none', stroke: 'var(--bronze)', 'stroke-width': 3 }, svg);
+    samp.filter(s => s[1] <= 0.5).forEach(([t, v]) => el('circle', { cx: ax.fx(t), cy: ax.fy(v), r: 7, fill: 'var(--bronze)', stroke: 'var(--sheet)', 'stroke-width': 2 }, svg));
+    el('line', { x1: 90, y1: ax.fy(0.3), x2: 950, y2: ax.fy(0.3), stroke: 'var(--blue)', 'stroke-dasharray': '8 6', 'stroke-width': 2 }, svg);
+    el('line', { x1: ax.fx(Tt), y1: ax.fy(0.3), x2: ax.fx(Tt), y2: 344, stroke: 'var(--muted)', 'stroke-width': 2 }, svg);
+    if (!isNaN(Ti)) el('line', { x1: ax.fx(Ti), y1: ax.fy(0.3), x2: ax.fx(Ti), y2: 344, stroke: 'var(--bronze)', 'stroke-width': 2, 'stroke-dasharray': '4 4' }, svg);
+    txt(svg, 110, 40, 'grey: true curve · bronze: what your stops record', { 'font-size': 16, fill: 'var(--muted)' });
+  };
+  bindRange('ivD', x => x + ' min', update)();
+})();
+
+/* ===========================================================
+   SLIDE 11 — FOUR-SPEED TAYLOR FIT
+   =========================================================== */
+(function () {
+  const speeds = [160, 190, 220, 260], scat = [1.07, 0.94, 1.05, 0.95], cols = ['var(--straw)', 'var(--bronze)', 'var(--violet)', 'var(--blue)'];
+  const n0 = 0.25, C0 = 400;
+  const base = t => 0.08 * (1 - Math.exp(-t / 1.5)) + 0.006 * t + 0.002 * Math.exp((t - 30) / 4);
+  const solveB = lim => { let a = 0, b = 200; for (let i = 0; i < 60; i++) { const m = (a + b) / 2; base(m) < lim ? a = m : b = m; } return a; };
+  const tb = solveB(0.3);
+  const curves = speeds.map((v, i) => { const T03 = Math.pow(C0 / v, 1 / n0) * scat[i], k = tb / T03; return t => base(t * k); });
+  const solve = (fn, lim) => { let a = 0, b = 200; for (let i = 0; i < 60; i++) { const m = (a + b) / 2; fn(m) < lim ? a = m : b = m; } return a; };
+  const s1 = document.getElementById('tyCurves'), s2 = document.getElementById('tyLog');
+  const update = () => {
+    const lim = +document.getElementById('tyC').value;
+    const T = curves.map(c => solve(c, lim));
+    // regression log T = a + b log V
+    const X = speeds.map(Math.log10), Y = T.map(Math.log10), mx = X.reduce((s, v) => s + v, 0) / 4, my = Y.reduce((s, v) => s + v, 0) / 4;
+    const sxy = X.reduce((s, v, i) => s + (v - mx) * (Y[i] - my), 0), sxx = X.reduce((s, v) => s + (v - mx) ** 2, 0), syy = Y.reduce((s, v) => s + (v - my) ** 2, 0);
+    const b = sxy / sxx, a = my - b * mx, n = -1 / b, C = Math.pow(10, -a / b), r2 = sxy * sxy / (sxx * syy);
+    document.getElementById('tyN').textContent = n.toFixed(3);
+    document.getElementById('tyCC').textContent = C.toFixed(0);
+    document.getElementById('tyR2').textContent = r2.toFixed(3);
+    // curves plot
+    s1.innerHTML = '';
+    const tmax = Math.min(120, Math.max(...T) * 1.4);
+    const ax = axes(s1, { x0: 80, y0: 14, w: 790, h: 300, xmin: 0, xmax: tmax, ymin: 0, ymax: 0.6, xticks: [0, +(tmax / 3).toFixed(0), +(2 * tmax / 3).toFixed(0), +tmax.toFixed(0)], yticks: [0, 0.2, 0.4, 0.6], xlab: 'cutting time, min', ylab: 'VB_B, mm' });
+    el('line', { x1: 80, y1: ax.fy(lim), x2: 870, y2: ax.fy(lim), stroke: 'var(--ink)', 'stroke-dasharray': '8 6', 'stroke-width': 2 }, s1);
+    curves.forEach((c, i) => { const p = []; for (let j = 0; j <= 200; j++) { const t = tmax * j / 200, v = c(t); if (v > 0.6) break; p.push([ax.fx(t), ax.fy(v)]); } el('polyline', { points: pts(p), fill: 'none', stroke: cols[i], 'stroke-width': 4 }, s1); el('circle', { cx: ax.fx(T[i]), cy: ax.fy(lim), r: 8, fill: cols[i], stroke: 'var(--sheet)', 'stroke-width': 2 }, s1); txt(s1, 100 + i * 190, 40, `${speeds[i]} m/min`, { 'font-size': 16, fill: cols[i], 'font-weight': 600 }); });
+    // log plot
+    s2.innerHTML = '';
+    const ax2 = axes(s2, { x0: 90, y0: 14, w: 780, h: 300, xmin: 100, xmax: 400, ymin: 1, ymax: 200, xlog: true, ylog: true, xticks: [100, 150, 200, 300, 400], yticks: [1, 10, 100], xlab: 'cutting speed v_c, m/min (log)', ylab: 'tool life T, min (log)' });
+    const line = []; for (let lv = 2; lv <= 2.602; lv += 0.01) { const v = Math.pow(10, lv), t = Math.pow(10, a + b * lv); if (t >= 1 && t <= 200) line.push([ax2.fx(v), ax2.fy(t)]); }
+    el('polyline', { points: pts(line), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 3, 'stroke-dasharray': '10 6' }, s2);
+    speeds.forEach((v, i) => { if (T[i] >= 1 && T[i] <= 200) { el('circle', { cx: ax2.fx(v), cy: ax2.fy(T[i]), r: 10, fill: cols[i], stroke: 'var(--sheet)', 'stroke-width': 3 }, s2); txt(s2, ax2.fx(v) + 14, ax2.fy(T[i]) - 10, T[i].toFixed(1), { 'font-size': 16, fill: 'var(--ink)' }); } });
+    txt(s2, 860, 40, `v_c · T^${n.toFixed(3)} = ${C.toFixed(0)}`, { 'font-size': 20, fill: 'var(--ink)', 'text-anchor': 'end', 'font-weight': 600 });
+  };
+  bindRange('tyC', x => x.toFixed(2) + ' mm', update)();
+})();
+
+/* ===========================================================
+   SLIDE 12 — SCATTER (WEIBULL SIMULATION)
+   =========================================================== */
+(function () {
+  const svg = document.getElementById('scSvg');
+  const gamma = z => { const g = 7, p = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7]; if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gamma(1 - z)); z -= 1; let x = p[0]; for (let i = 1; i < g + 2; i++) x += p[i] / (z + i); const t = z + g + 0.5; return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x; };
+  let seed = 3;
+  const run = () => {
+    const b = +document.getElementById('scB').value, mean = 20, eta = mean / gamma(1 + 1 / b);
+    const r = rng(seed); const L = Array.from({ length: 30 }, () => eta * Math.pow(-Math.log(1 - r()), 1 / b)).sort((p, q) => p - q);
+    const m = L.reduce((s, v) => s + v, 0) / 30, sd = Math.sqrt(L.reduce((s, v) => s + (v - m) ** 2, 0) / 29), b10 = eta * Math.pow(-Math.log(0.9), 1 / b);
+    document.getElementById('scM').textContent = m.toFixed(1);
+    document.getElementById('scB10').textContent = b10.toFixed(1);
+    document.getElementById('scCV').textContent = (sd / m * 100).toFixed(0) + '%';
+    svg.innerHTML = '';
+    const bins = 16, xmax = 50, bw = xmax / bins, cnt = Array(bins).fill(0); L.forEach(v => { const k = Math.min(bins - 1, Math.floor(v / bw)); cnt[k]++; });
+    const ymax = Math.max(8, ...cnt);
+    const ax = axes(svg, { x0: 80, y0: 14, w: 860, h: 300, xmin: 0, xmax, ymin: 0, ymax, xticks: [0, 10, 20, 30, 40, 50], yticks: [0, Math.round(ymax / 2), ymax], xlab: 'tool life, min (30 inserts)', ylab: 'count' });
+    cnt.forEach((c, i) => { if (c) el('rect', { x: ax.fx(i * bw) + 2, y: ax.fy(c), width: ax.fx(bw) - ax.fx(0) - 4, height: ax.fy(0) - ax.fy(c), fill: 'var(--bronze)', opacity: .85 }, svg); });
+    // pdf
+    const pdf = t => (b / eta) * Math.pow(t / eta, b - 1) * Math.exp(-Math.pow(t / eta, b)) * 30 * bw;
+    const p = []; for (let t = 0.2; t <= xmax; t += 0.2) p.push([ax.fx(t), ax.fy(Math.min(ymax, pdf(t)))]); el('polyline', { points: pts(p), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 3 }, svg);
+    [[b10, 'B10', 'var(--bad)'], [m, 'mean', 'var(--blue)']].forEach(([v, l, c]) => { el('line', { x1: ax.fx(v), y1: 14, x2: ax.fx(v), y2: 314, stroke: c, 'stroke-width': 3, 'stroke-dasharray': '8 5' }, svg); txt(svg, ax.fx(v) + 6, 36, l, { 'font-size': 16, fill: c, 'font-weight': 600 }); });
+  };
+  bindRange('scB', x => x.toFixed(1), run)();
+  document.getElementById('scRun').addEventListener('click', () => { seed += 11; run(); });
+})();
+
+/* ===========================================================
+   SLIDE 14 — MEASUREMENT METHODS
+   =========================================================== */
+(function () {
+  const M = [
+    ['Toolmaker\'s microscope', 'direct', 'off-line', 'The reference method in ISO 3685: measure VB and crater after stopping. Accurate but slow, and depends on the operator finding the original edge.', ['direct', 'off-line', 'low cost'], ''],
+    ['Machine vision (off-line)', 'direct', 'off-line', 'Camera, lighting and image processing segment the wear land. An inline pixel calibration gave about 3% average error against a digital microscope, and also reported wear area and perimeter (Thakre et al., 2019). Hough-transform edge fitting measured within 0.04 mm and separated broken from worn inserts 94.3% of the time (Khoury et al., 2020).', ['direct', 'off-line', 'automated'], ''],
+    ['Machine vision (in-process)', 'direct', 'in-process', 'A CCD camera on the CNC lathe compared edge pixels of new and used tools during cutting; pixel counts correlated strongly with 3D-microscope measurements (Sawangsri & Wattanasinbumrung, 2022).', ['direct', 'in-process', 'automated'], ''],
+    ['Vibration (accelerometer)', 'indirect', 'in-process', 'In ISO 3685 tests on thirty inserts, tool vibration features changed with wear and correlated strongly with flank-wear growth (Serra & Rmili, 2016).', ['indirect', 'in-process', 'needs model'], ''],
+    ['Cutting force', 'indirect', 'in-process', 'Force signals are strongly linked with flank wear; FEM was used to estimate how VB up to 0.3 mm changes force signals in AISI 1045 cutting (Equeter et al., 2018).', ['indirect', 'in-process', 'needs model'], ''],
+    ['Surface roughness', 'indirect', 'off-line', 'Measuring the part instead of the tool. Used as a tool-life criterion it extended life by 23% on average (Iqbal et al., 2022).', ['indirect', 'off-line', 'part-focused'], ''],
+  ];
+  const box = document.getElementById('methods'), filt = document.getElementById('mFilt');
+  let f = 'all';
+  const draw = () => { box.innerHTML = M.filter(m => f === 'all' || m[1] === f || m[2] === f).map(m => `<div class="meth"><div class="mh"><b>${m[0]}</b><div class="tags">${m[4].map(t => `<span class="${t === 'in-process' || t === 'automated' ? 'g' : t === 'needs model' ? 'r' : ''}">${t}</span>`).join('')}</div></div><p style="font-size:19px">${m[3]}</p></div>`).join(''); };
+  [['all', 'All'], ['direct', 'Direct'], ['indirect', 'Indirect'], ['in-process', 'In-process'], ['off-line', 'Off-line']].forEach(([k, l]) => { const b = document.createElement('button'); b.className = 'chipbtn'; b.textContent = l; b.setAttribute('aria-pressed', k === f); b.addEventListener('click', () => { f = k; filt.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); }); filt.appendChild(b); });
+  draw();
+})();
+
+/* ===========================================================
+   SLIDE 15 — LAB SHEET
+   =========================================================== */
+(function () {
+  const items = ['Work material grade and heat treatment', 'Work hardness, checked across the diameter', 'Bar diameter at start and end', 'Machine model and how v<sub>c</sub> was held constant', 'Insert designation, grade, coating, batch', 'Holder designation and overhang', 'Feed, depth of cut and cutting speed', 'Cutting fluid, or dry', 'Cumulative cutting time at every stop', 'VB<sub>B</sub>, VB<sub>B max</sub>, VB<sub>N</sub>, VB<sub>C</sub> at every stop', 'Crater KT (if measurable)', 'Wear form noted at every stop', 'Criterion used to end tool life', 'Tool life T, interpolated', 'Photos of the edge at the end', 'Chip sample or chip-form note'];
+  const box = document.getElementById('labSheet');
+  box.innerHTML = items.map((t, i) => `<label><input type="checkbox" id="lb${i}"> <span>${t}</span></label>`).join('');
+  const bar = document.getElementById('labBar');
+  const up = () => {
+    const done = items.map((_, i) => document.getElementById('lb' + i).checked), n = done.filter(Boolean).length, p = n / items.length * 100;
+    document.getElementById('labPct').textContent = p.toFixed(0) + '%';
+    const miss = items.filter((_, i) => !done[i]);
+    document.getElementById('labMiss').innerHTML = miss.length ? 'Still missing: ' + miss.slice(0, 3).join('; ') + (miss.length > 3 ? '…' : '') : 'Complete. This result can be compared with other tests.';
+    bar.innerHTML = ''; el('rect', { x: 0, y: 8, width: 600, height: 24, rx: 4, fill: 'var(--rule)' }, bar); el('rect', { x: 0, y: 8, width: 6 * p, height: 24, rx: 4, fill: p === 100 ? 'var(--good)' : 'var(--bronze)' }, bar);
+  };
+  items.forEach((_, i) => document.getElementById('lb' + i).addEventListener('change', up)); up();
+})();
+
+/* ===========================================================
+   SLIDE 16 — QUIZ
+   =========================================================== */
+(function () {
+  const Q = [
+    ['Flank wear on a carbide insert is regular in zone B. Which criterion applies?', ['VB_B = 0.3 mm', 'VB_B max = 0.6 mm', 'KT = 0.3 mm'], 0, 'With regular wear, the average flank-wear width in zone B is used, 0.3 mm for carbide.'],
+    ['Crater-depth limit for carbide at f = 0.25 mm/rev?', ['0.060 mm', '0.135 mm', '0.250 mm'], 1, 'KT = 0.06 + 0.3 × 0.25 = 0.135 mm.'],
+    ['Flank-wear width is measured from…', ['the worn edge', 'the original cutting edge', 'the nose radius centre'], 1, 'Always perpendicular to the original edge position, established on the unworn part of the insert.'],
+    ['Where does notch wear (VB_N) form?', ['At the nose', 'At the depth-of-cut line', 'On the rake face'], 1, 'Zone N sits at the depth-of-cut line, where hardened burrs and the work-hardened layer meet the edge.'],
+    ['Why test at four or more cutting speeds?', ['To fit log T against log v and estimate n and C with a check on scatter', 'Because the standard needs four inserts', 'To find the best feed'], 0, 'Two points always fit a line; more points show whether the Taylor line is valid and how much scatter there is.'],
+    ['With Weibull shape β = 2, changing tools at the mean life means…', ['almost no tools fail in the cut', 'many tools fail before replacement', 'tool life doubles'], 1, 'Low β means wide scatter, so a large share of tools fail before the mean; plan on an early percentile such as B10.'],
+  ];
+  const box = document.getElementById('quiz'), score = document.getElementById('quizScore'), state = Q.map(() => null);
+  const sc = () => { const d = state.filter(s => s !== null).length, ok = state.filter(s => s === true).length; score.textContent = d ? `${ok} of ${d} correct on first try` : 'Answers are checked instantly. Nothing is recorded.'; };
+  Q.forEach((q, i) => {
+    const d = document.createElement('div'); d.className = 'q';
+    d.innerHTML = `<div class="qt">${i + 1}. ${q[0]}</div><div class="opts"></div><div class="fb"></div>`;
+    const opts = d.querySelector('.opts'), fb = d.querySelector('.fb');
+    q[1].forEach((o, j) => { const b = document.createElement('button'); b.className = 'chipbtn'; b.textContent = o; b.addEventListener('click', () => { const right = j === q[2]; if (state[i] === null) state[i] = right; b.classList.add(right ? 'right' : 'wrong'); if (right) opts.querySelectorAll('button').forEach(x => x.disabled = true); fb.textContent = right ? q[3] : 'Not quite. Try another option.'; sc(); }); opts.appendChild(b); });
+    box.appendChild(d);
+  });
+  sc();
+})();
+/* ===========================================================
+   SLIDE PRESENTATION CONTROLLER (frontend-slides pattern)
+   =========================================================== */
+class SlidePresentation {
+  constructor() {
+    this.slides = [...document.querySelectorAll('.slide')];
+    this.stage = document.getElementById('deckStage');
+    this.current = 0;
+    this.scale(); window.addEventListener('resize', () => this.scale());
+    document.addEventListener('keydown', e => {
+      if (e.target.closest('input, select, textarea')) return;
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); this.go(this.current + 1); }
+      if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); this.go(this.current - 1); }
+      if (e.key === 'Home') this.go(0);
+      if (e.key === 'End') this.go(this.slides.length - 1);
+    });
+    let sx = null, sy = null;
+    document.addEventListener('touchstart', e => { if (e.target.closest('input, button')) { sx = null; return; } sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+    document.addEventListener('touchend', e => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) this.go(this.current + (dx < 0 ? 1 : -1)); sx = null; });
+    document.getElementById('prevBtn').addEventListener('click', () => this.go(this.current - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => this.go(this.current + 1));
+    document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => this.go(+b.dataset.go)));
+    const h = parseInt((location.hash.match(/^#s(\d+)$/) || [])[1], 10);
+    this.go(Number.isFinite(h) ? h - 1 : 0);
+  }
+  scale() {
+    const f = Math.min(innerWidth / 1920, innerHeight / 1080);
+    this.stage.style.transform = `translate(${(innerWidth - 1920 * f) / 2}px, ${(innerHeight - 1080 * f) / 2}px) scale(${f})`;
+  }
+  go(i) {
+    this.current = Math.max(0, Math.min(i, this.slides.length - 1));
+    this.slides.forEach((s, j) => { s.classList.toggle('active', j === this.current); s.classList.toggle('visible', j === this.current); });
+    document.getElementById('count').textContent = `${this.current + 1} / ${this.slides.length}`;
+    document.getElementById('progress').style.width = ((this.current + 1) / this.slides.length * 100) + '%';
+    try { history.replaceState(null, '', '#s' + (this.current + 1)); } catch (e) {}
+  }
+}
+new SlidePresentation();
+
+/* theme toggle */
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+});
+
+</script>
+
+</body></html>
