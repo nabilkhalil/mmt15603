@@ -8,6 +8,7 @@ Interactive lecture decks for MMT15603 (Faculty of Mechanical Engineering & Tech
 | --- | --- |
 | 2 | [Nomenclature of Machining (anatomy)](https://nabilkhalil.github.io/mmt15603/slides/Nomenclature%20of%20Machining%20(anatomy).html) |
 | 3 | [Factors Affecting Machinability (anatomy)](https://nabilkhalil.github.io/mmt15603/slides/Factors%20Affecting%20Machinability%20(anatomy).html) |
+| 4 | [Parameters Affecting Machinability](https://nabilkhalil.github.io/mmt15603/slides/Parameters%20Affecting%20Machinability.html) |
 
 ## Adding a deck
 
