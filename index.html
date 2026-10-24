@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MMT15603 Slides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --paper:#E8ECEF; --sheet:#F7F9FA; --ink:#131A21; --muted:#556370; --rule:#C3CCD3;
+  --straw:#C99A2E; --bronze:#A8621C; --violet:#6B4690; --blue:#2B5C97;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#10161C; --sheet:#18212A; --ink:#E5EAEE; --muted:#93A1AD; --rule:#2B3743;
+    --straw:#E2B651; --bronze:#E08B3E; --violet:#A98BD0; --blue:#6F9EDB;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#10161C; --sheet:#18212A; --ink:#E5EAEE; --muted:#93A1AD; --rule:#2B3743;
+  --straw:#E2B651; --bronze:#E08B3E; --violet:#A98BD0; --blue:#6F9EDB;
+  color-scheme: dark;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:17px/1.55 'IBM Plex Sans', 'Segoe UI', sans-serif; }
+main { width:min(960px, 100% - 32px); margin:0 auto; padding:64px 0 80px; }
+.eyebrow { font-family:'IBM Plex Mono', Consolas, monospace; font-size:14px; letter-spacing:.08em; text-transform:uppercase; color:var(--bronze); }
+h1 { font-family:'Archivo', 'Arial Narrow', sans-serif; font-stretch:112%; font-weight:750; font-size:clamp(38px, 7vw, 64px); line-height:1.02; margin:10px 0 14px; letter-spacing:-.01em; }
+.lede { color:var(--muted); max-width:640px; margin:0 0 28px; }
+.temper { height:6px; border-radius:3px; background:linear-gradient(90deg, var(--straw), var(--bronze), var(--violet), var(--blue)); margin-bottom:36px; max-width:280px; }
+ul { list-style:none; padding:0; margin:0; display:grid; gap:14px; }
+a.deck { display:grid; grid-template-columns:72px 1fr auto; gap:18px; align-items:center; padding:22px 24px; background:var(--sheet); border:1px solid var(--rule); border-radius:8px; color:inherit; text-decoration:none; transition:border-color .2s, transform .2s; }
+a.deck:hover { border-color:var(--bronze); transform:translateY(-2px); }
+a.deck:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
+.num { font-family:'IBM Plex Mono', Consolas, monospace; font-size:28px; color:var(--bronze); }
+.t { font-family:'Archivo', sans-serif; font-stretch:105%; font-weight:650; font-size:24px; line-height:1.2; }
+.d { color:var(--muted); font-size:15px; }
+.go { font-family:'IBM Plex Mono', monospace; font-size:14px; color:var(--muted); white-space:nowrap; }
+footer { margin-top:40px; color:var(--muted); font-size:14px; }
+@media (max-width:560px) { a.deck { grid-template-columns:48px 1fr; } .go { display:none; } .num { font-size:22px; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">MMT15603 · Faculty of Mechanical Engineering &amp; Technology, UniMAP</div>
+  <h1>Machining slides</h1>
+  <p class="lede">Interactive lecture decks. Open one and use the arrow keys, the on-screen buttons or a swipe to move between slides.</p>
+  <div class="temper" aria-hidden="true"></div>
+  <ul id="decks"></ul>
+  <footer>Interactive lathe figures built with the <a href="https://github.com/wheresryan22/anatomy" style="color:inherit">Anatomy</a> kit (MIT).</footer>
+</main>
+<script>
+// Every .html file in /slides is listed. Name files "NN-title-words.html" (NN = chapter number).
+const REPO = "nabilkhalil/mmt15603";
+const FALLBACK = ["02-nomenclature-of-machining.html", "03-factors-affecting-machinability.html"];
+const NOTES = {
+  "02-nomenclature-of-machining.html": "Tool nomenclature, rake and clearance angles, machinability. Interactive lathe and tool.",
+  "03-factors-affecting-machinability.html": "Machine, tool, cutting conditions and work material. Interactive cutting-system lathe.",
+};
+const titleOf = (file) => file.replace(/\.html$/i, "").replace(/^\d+[-_ ]*/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const numOf = (file) => (file.match(/^(\d+)/) || [])[1] || "—";
+function render(files) {
+  const list = document.getElementById("decks");
+  list.innerHTML = "";
+  files.filter((f) => /\.html?$/i.test(f)).sort().forEach((file) => {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.className = "deck";
+    a.href = "slides/" + encodeURIComponent(file);
+    a.innerHTML = `<span class="num">${numOf(file)}</span><span><span class="t"></span><br><span class="d"></span></span><span class="go">Open →</span>`;
+    a.querySelector(".t").textContent = (numOf(file) !== "—" ? "Chapter " + Number(numOf(file)) + " · " : "") + titleOf(file);
+    a.querySelector(".d").textContent = NOTES[file] || "Lecture slides";
+    li.appendChild(a);
+    list.appendChild(li);
+  });
+}
+render(FALLBACK);
+fetch(`https://api.github.com/repos/${REPO}/contents/slides`)
+  .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+  .then((items) => render(items.filter((i) => i.type === "file").map((i) => i.name)))
+  .catch(() => {});
+</script>
+</body>
+</html>
