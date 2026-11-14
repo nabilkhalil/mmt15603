@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cutting Force</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* ===========================================================
+   DESIGN PLAN
+   Layout: fixed 1920×1080 stage; each slide = section label rail
+   on the left edge, title block, then a two-zone grid
+   (explanation | live instrument). Colour system is taken from
+   the temper (oxide) colours of hot steel chips:
+   straw → bronze → purple → blue.
+   =========================================================== */
+:root {
+  --paper:  #E8ECEF;   /* tool-room steel grey */
+  --sheet:  #F7F9FA;   /* card / instrument face */
+  --ink:    #131A21;
+  --muted:  #556370;
+  --rule:   #C3CCD3;
+  --straw:  #C99A2E;   /* temper ~220 °C */
+  --bronze: #A8621C;   /* temper ~255 °C — main accent */
+  --violet: #6B4690;   /* temper ~280 °C */
+  --blue:   #2B5C97;   /* temper ~300 °C — second accent */
+  --good:   #2E7A55;
+  --bad:    #B23A2D;
+  --work:   #9AA7B1;   /* workpiece fill */
+  --tool:   #3C4954;   /* tool body fill */
+  --chrome-bg: #DCE2E6;
+  --stage-bg: var(--chrome-bg);
+  --slide-bg: var(--paper);
+
+  --f-display: 'Archivo', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --f-body: 'IBM Plex Sans', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --f-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#10161C; --sheet:#18212A; --ink:#E5EAEE; --muted:#93A1AD; --rule:#2B3743;
+    --straw:#E2B651; --bronze:#E08B3E; --violet:#A98BD0; --blue:#6F9EDB;
+    --good:#5DBB8A; --bad:#EE7A6C; --work:#4A5864; --tool:#9BA9B5; --chrome-bg:#0A0F13;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#10161C; --sheet:#18212A; --ink:#E5EAEE; --muted:#93A1AD; --rule:#2B3743;
+  --straw:#E2B651; --bronze:#E08B3E; --violet:#A98BD0; --blue:#6F9EDB;
+  --good:#5DBB8A; --bad:#EE7A6C; --work:#4A5864; --tool:#9BA9B5; --chrome-bg:#0A0F13;
+  color-scheme: dark;
+}
+
+/* ===========================================================
+   FIXED 16:9 STAGE — viewport-base.css (frontend-slides), full
+   =========================================================== */
+html, body { width:100%; height:100%; margin:0; overflow:hidden; background:var(--stage-bg, #000); }
+.deck-viewport { position:fixed; inset:0; overflow:hidden; background:var(--stage-bg, #000); }
+.deck-stage { position:absolute; left:0; top:0; width:1920px; height:1080px; overflow:hidden; transform-origin:0 0; background:var(--slide-bg, #fff); }
+.slide { position:absolute; inset:0; width:1920px; height:1080px; overflow:hidden; display:block; visibility:hidden; opacity:0; pointer-events:none; background:var(--slide-bg, #fff); }
+.slide.active, .slide.visible { visibility:visible; opacity:1; pointer-events:auto; z-index:1; }
+img, video, canvas, svg { max-width:100%; max-height:100%; }
+.deck-controls { position:fixed; right:calc(16px + env(safe-area-inset-right, 0px)); bottom:22px; z-index:1000; }
+@media print {
+  html, body { width:1920px; height:auto; overflow:visible; background:#fff; }
+  .deck-viewport { position:static; overflow:visible; background:#fff; }
+  .deck-stage { position:static; width:auto; height:auto; transform:none !important; background:none; }
+  .slide { position:relative; display:block !important; visibility:visible !important; opacity:1 !important; pointer-events:auto !important; width:1920px; height:1080px; break-after:page; page-break-after:always; }
+  .slide:last-child { break-after:auto; page-break-after:auto; }
+  .deck-controls { display:none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.2s !important; }
+}
+
+/* ===========================================================
+   BASE TYPE & SLIDE FRAME
+   =========================================================== */
+* { box-sizing:border-box; }
+body { font-family:var(--f-body); color:var(--ink); }
+.slide { color:var(--ink); font-family:var(--f-body); font-size:26px; line-height:1.45; }
+.frame { position:absolute; inset:0; padding:76px 96px 96px 150px; display:flex; flex-direction:column; gap:34px; }
+.rail { position:absolute; left:0; top:0; bottom:0; width:96px; border-right:1px solid var(--rule); display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:40px 0; }
+.rail .no { font-family:var(--f-mono); font-size:20px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.rail .lab { writing-mode:vertical-rl; transform:rotate(180deg); font-family:var(--f-display); font-stretch:115%; font-weight:600; font-size:17px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted); }
+.temper { width:8px; height:220px; border-radius:4px; background:linear-gradient(var(--straw), var(--bronze), var(--violet), var(--blue)); }
+
+.eyebrow { font-family:var(--f-mono); font-size:20px; letter-spacing:0.08em; text-transform:uppercase; color:var(--bronze); }
+h1, h2, h3 { margin:0; font-family:var(--f-display); text-wrap:balance; }
+h2 { font-size:66px; font-weight:700; font-stretch:112%; line-height:1.04; letter-spacing:-0.01em; }
+h3 { font-size:30px; font-weight:650; font-stretch:105%; line-height:1.15; }
+p { margin:0; }
+.lede { font-size:29px; color:var(--muted); max-width:1250px; }
+.small { font-size:21px; color:var(--muted); line-height:1.45; }
+.mono { font-family:var(--f-mono); font-variant-numeric:tabular-nums; }
+.head { display:flex; flex-direction:column; gap:14px; }
+.grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:48px; flex:1; min-height:0; }
+.grid-6-4 { display:grid; grid-template-columns: 1.15fr 1fr; gap:48px; flex:1; min-height:0; }
+.grid-4-6 { display:grid; grid-template-columns: 0.85fr 1.15fr; gap:48px; flex:1; min-height:0; }
+.col { display:flex; flex-direction:column; gap:22px; min-width:0; min-height:0; }
+.panel { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:28px 32px; }
+.list { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:16px; }
+.list li { position:relative; padding-left:30px; }
+.list li::before { content:""; position:absolute; left:0; top:0.62em; width:14px; height:3px; background:var(--bronze); }
+b, strong { font-weight:600; }
+.k-straw{color:var(--straw)} .k-bronze{color:var(--bronze)} .k-violet{color:var(--violet)} .k-blue{color:var(--blue)}
+.cite { font-family:var(--f-mono); font-size:17px; color:var(--muted); white-space:nowrap; }
+.cite a, .refs a { color:inherit; text-decoration:underline; text-decoration-color:var(--rule); text-underline-offset:3px; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
+
+/* entrance: content is visible at rest; only a short lift on arrival */
+.reveal { transition: transform .7s var(--ease), opacity .7s var(--ease); }
+.slide:not(.visible) .reveal { transform: translateY(18px); opacity:.35; }
+.slide.visible .reveal:nth-child(2){transition-delay:.06s} .slide.visible .reveal:nth-child(3){transition-delay:.12s} .slide.visible .reveal:nth-child(4){transition-delay:.18s}
+
+/* ===========================================================
+   CONTROLS INSIDE SLIDES (sliders, chips, buttons)
+   =========================================================== */
+.ctrl { display:grid; grid-template-columns: 200px 1fr 110px; align-items:center; gap:18px; font-size:22px; }
+.ctrl label { color:var(--muted); }
+.ctrl output { font-family:var(--f-mono); font-variant-numeric:tabular-nums; text-align:right; color:var(--ink); font-weight:500; }
+input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:3px; background:var(--rule); outline:none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; border-radius:50%; background:var(--bronze); border:4px solid var(--sheet); box-shadow:0 0 0 1px var(--bronze); cursor:pointer; }
+input[type=range]::-moz-range-thumb { width:22px; height:22px; border-radius:50%; background:var(--bronze); border:4px solid var(--sheet); cursor:pointer; }
+.chipbtn { font-family:var(--f-body); font-size:21px; padding:10px 18px; border-radius:4px; border:1px solid var(--rule); background:var(--sheet); color:var(--ink); cursor:pointer; transition:background .2s, border-color .2s, color .2s; }
+.chipbtn:hover { border-color:var(--bronze); }
+.chipbtn[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.chiprow { display:flex; flex-wrap:wrap; gap:10px; }
+.readouts { display:grid; grid-template-columns: repeat(4, 1fr); gap:0; border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:var(--sheet); }
+.readouts > div { padding:16px 20px; border-right:1px solid var(--rule); display:flex; flex-direction:column; gap:4px; }
+.readouts > div:last-child { border-right:none; }
+.readouts .k { font-size:18px; color:var(--muted); }
+.readouts .v { font-family:var(--f-mono); font-size:34px; font-weight:500; font-variant-numeric:tabular-nums; }
+.readouts .u { font-size:17px; color:var(--muted); font-family:var(--f-mono); }
+svg text { font-family:var(--f-mono); }
+.hint { font-family:var(--f-mono); font-size:18px; color:var(--muted); }
+
+/* ===========================================================
+   SLIDE 1 — TITLE
+   =========================================================== */
+.title-wrap { position:absolute; inset:0; display:grid; grid-template-columns: 1fr 820px; }
+.title-left { padding:120px 0 100px 150px; display:flex; flex-direction:column; justify-content:space-between; }
+.title-left h1 { font-size:150px; font-weight:800; font-stretch:118%; line-height:.9; letter-spacing:-0.02em; }
+.title-left h1 span { display:block; color:var(--bronze); font-stretch:70%; font-weight:500; font-size:112px; letter-spacing:0; margin-top:16px; }
+.course { display:flex; gap:40px; align-items:flex-end; }
+.course .code { font-family:var(--f-mono); font-size:30px; padding:8px 16px; border:2px solid var(--ink); border-radius:4px; }
+.course .meta { font-size:24px; color:var(--muted); line-height:1.4; }
+.title-right { position:relative; background:var(--sheet); border-left:1px solid var(--rule); display:flex; flex-direction:column; justify-content:center; padding:60px; gap:28px; }
+.temper-scale { display:grid; grid-template-columns: repeat(4,1fr); gap:6px; }
+.temper-scale div { height:16px; border-radius:2px; }
+.temper-scale span { font-family:var(--f-mono); font-size:16px; color:var(--muted); }
+.flow-anim { animation: flowdash 1.6s linear infinite; }
+@keyframes flowdash { to { stroke-dashoffset: -40; } }
+
+/* ===========================================================
+   SLIDE 2 — ROADMAP
+   =========================================================== */
+.roadmap { display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; }
+.stop { text-align:left; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:24px 26px; display:flex; flex-direction:column; gap:8px; cursor:pointer; font:inherit; color:inherit; transition:border-color .2s, transform .2s; }
+.stop:hover { border-color:var(--bronze); transform:translateY(-2px); }
+.stop .n { font-family:var(--f-mono); font-size:18px; color:var(--bronze); }
+.stop .t { font-family:var(--f-display); font-weight:650; font-size:29px; font-stretch:105%; line-height:1.15; }
+.stop .d { font-size:20px; color:var(--muted); line-height:1.4; }
+.outcomes { display:grid; grid-template-columns: repeat(3,1fr); gap:28px; }
+.outcomes div { border-top:3px solid var(--ink); padding-top:14px; font-size:23px; }
+.outcomes .co { font-family:var(--f-mono); font-size:17px; color:var(--muted); display:block; margin-bottom:6px; }
+
+/* ===========================================================
+   SLIDE 4 — ANATOMY (hotspots)
+   =========================================================== */
+.part { cursor:pointer; transition: opacity .25s, stroke-width .25s; }
+.anat.focus .part { opacity:.28; }
+.anat.focus .part.on { opacity:1; }
+.partlist { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.partlist button { text-align:left; }
+.defbox { min-height:250px; display:flex; flex-direction:column; gap:12px; }
+.defbox .sym { font-family:var(--f-mono); color:var(--bronze); font-size:22px; }
+
+/* ASA decoder */
+.sig { display:flex; gap:6px; flex-wrap:nowrap; font-family:var(--f-mono); font-size:36px; font-weight:500; }
+.sig button { font:inherit; padding:6px 12px; border:1px solid var(--rule); border-radius:4px; background:var(--sheet); color:var(--ink); cursor:pointer; font-variant-numeric:tabular-nums; }
+.sig button[aria-pressed="true"] { background:var(--bronze); color:#fff; border-color:var(--bronze); }
+.sig .dash { align-self:center; color:var(--muted); }
+table.angles { width:100%; border-collapse:collapse; font-size:21px; }
+table.angles th, table.angles td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--rule); vertical-align:top; }
+table.angles th { font-family:var(--f-mono); font-weight:500; font-size:17px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+table.angles td.sym { font-family:var(--f-mono); color:var(--bronze); white-space:nowrap; }
+
+/* rake class cards */
+.cards3 { display:grid; grid-template-columns: repeat(3, 1fr); gap:28px; flex:1; min-height:0; }
+.rcard { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:26px 28px; display:flex; flex-direction:column; gap:14px; }
+.rcard .tag { font-family:var(--f-mono); font-size:20px; letter-spacing:.04em; }
+.rcard .svgbox { height:200px; display:flex; justify-content:center; }
+.rcard dl { margin:0; display:grid; grid-template-columns: 120px 1fr; gap:8px 14px; font-size:20px; line-height:1.4; }
+.rcard dt { color:var(--muted); font-family:var(--f-mono); font-size:16px; text-transform:uppercase; letter-spacing:.05em; padding-top:3px; }
+.rcard dd { margin:0; }
+
+/* evidence cards */
+.evid { display:grid; grid-template-columns: 1fr 1fr; gap:24px; }
+.ev { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:24px 28px; display:flex; flex-direction:column; gap:10px; }
+.ev .what { font-family:var(--f-mono); font-size:17px; color:var(--blue); text-transform:uppercase; letter-spacing:.06em; }
+.ev p { font-size:23px; }
+
+/* quiz */
+.quiz { display:grid; grid-template-columns: 1fr 1fr; gap:24px; }
+.q { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:22px 26px; display:flex; flex-direction:column; gap:12px; }
+.q .qt { font-size:23px; font-weight:500; }
+.q .opts { display:flex; flex-wrap:wrap; gap:8px; }
+.q .opts button { font-size:21px; padding:9px 16px; }
+.q .opts button.right { background:var(--good); color:#fff; border-color:var(--good); }
+.q .opts button.wrong { background:var(--bad); color:#fff; border-color:var(--bad); }
+.q .fb { font-size:19px; color:var(--muted); min-height:56px; }
+
+/* assignment */
+.tasks { counter-reset:t; margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:14px; }
+.tasks li { counter-increment:t; display:grid; grid-template-columns: 56px 1fr; gap:12px; font-size:24px; }
+.tasks li::before { content: counter(t, decimal-leading-zero); font-family:var(--f-mono); color:var(--bronze); font-size:22px; padding-top:2px; }
+.tasks li .note { display:block; font-size:19px; color:var(--muted); margin-top:4px; }
+.propcard { font-family:var(--f-mono); }
+.propcard .row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px dashed var(--rule); font-size:23px; font-variant-numeric:tabular-nums; }
+.propcard .row span:first-child { color:var(--muted); font-family:var(--f-body); }
+
+/* references */
+.refs { columns:2; column-gap:56px; font-size:18.5px; line-height:1.42; margin:0; padding:0; list-style:none; }
+.refs li { break-inside:avoid; margin-bottom:14px; padding-left:28px; text-indent:-28px; }
+
+/* ===========================================================
+   DECK CHROME (outside the stage)
+   =========================================================== */
+.progress { position:fixed; left:0; top:0; height:4px; background:linear-gradient(90deg, var(--straw), var(--bronze), var(--violet), var(--blue)); z-index:1001; transition:width .4s var(--ease); }
+.deck-controls { display:flex; align-items:center; gap:6px; padding:6px; border-radius:999px; background:color-mix(in srgb, var(--sheet) 90%, transparent); border:1px solid var(--rule); box-shadow:0 6px 24px rgba(0,0,0,.12); bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
+.deck-controls button { width:40px; height:40px; border-radius:50%; border:none; background:transparent; color:var(--ink); cursor:pointer; font-size:20px; display:grid; place-items:center; }
+.deck-controls button:hover { background:var(--rule); }
+.deck-controls .count { font-family:var(--f-mono); font-size:14px; color:var(--muted); padding:0 8px; font-variant-numeric:tabular-nums; min-width:70px; text-align:center; }
+
+
+/* ===========================================================
+   CHAPTER 3 ADDITIONS (same token system as Chapter 2)
+   =========================================================== */
+.sys { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:26px; }
+.sys .stage-col { display:flex; flex-direction:column; gap:12px; }
+.sys .stage-h { font-family:var(--f-mono); font-size:18px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); border-bottom:2px solid var(--ink); padding-bottom:8px; }
+.node { text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:14px 18px; display:flex; flex-direction:column; gap:4px; transition: opacity .25s, border-color .25s, box-shadow .25s; }
+.node b { font-family:var(--f-display); font-stretch:105%; font-size:24px; font-weight:650; }
+.node span { font-size:18px; color:var(--muted); line-height:1.35; }
+button.node { cursor:pointer; }
+button.node:hover { border-color:var(--bronze); }
+.sys.focus .node { opacity:.3; }
+.sys.focus .node.hit { opacity:1; border-color:var(--blue); box-shadow: inset 4px 0 0 var(--blue); }
+.sys.focus .node.src { opacity:1; border-color:var(--bronze); box-shadow: inset 4px 0 0 var(--bronze); }
+
+.sorter { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; }
+.fac { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:16px 18px; display:flex; flex-direction:column; gap:10px; }
+.fac .ft { font-size:22px; font-weight:500; line-height:1.3; }
+.fac .ft i { font-style:normal; font-family:var(--f-mono); color:var(--bronze); margin-right:8px; font-size:18px; }
+.fac .opts { display:flex; flex-wrap:wrap; gap:6px; }
+.fac .opts button { font-size:16px; padding:6px 10px; }
+.fac .opts button.right { background:var(--good); color:#fff; border-color:var(--good); }
+.fac .opts button.wrong { background:var(--bad); color:#fff; border-color:var(--bad); }
+.fac .fb { font-size:16px; color:var(--muted); min-height:22px; line-height:1.35; }
+.legend4 { display:flex; gap:26px; flex-wrap:wrap; font-size:20px; color:var(--muted); }
+.legend4 b { color:var(--ink); }
+
+.fix { border:1px dashed var(--bad); border-radius:6px; padding:16px 20px; display:flex; flex-direction:column; gap:8px; }
+.fix .was { font-family:var(--f-mono); font-size:20px; color:var(--bad); text-decoration:line-through; }
+.fix .now { font-family:var(--f-mono); font-size:24px; color:var(--good); }
+.formula { font-family:var(--f-mono); font-size:40px; font-weight:500; }
+.status { font-family:var(--f-mono); font-size:20px; padding:10px 14px; border-radius:4px; }
+.status.ok { background:color-mix(in srgb, var(--good) 15%, transparent); color:var(--good); }
+.status.no { background:color-mix(in srgb, var(--bad) 15%, transparent); color:var(--bad); }
+select.sel { font:inherit; font-size:21px; padding:8px 12px; border:1px solid var(--rule); border-radius:4px; background:var(--sheet); color:var(--ink); width:100%; }
+
+.coolrow { display:grid; grid-template-columns: 210px 1fr 1fr; gap:14px; align-items:center; padding:9px 0; border-bottom:1px solid var(--rule); font-size:20px; cursor:pointer; }
+.coolrow:hover .cname { color:var(--bronze); }
+.coolrow.on .cname { color:var(--bronze); font-weight:600; }
+.meter { height:12px; border-radius:6px; background:var(--rule); position:relative; overflow:hidden; }
+.meter i { position:absolute; inset:0 auto 0 0; border-radius:6px; }
+.coolhead { display:grid; grid-template-columns: 210px 1fr 1fr; gap:14px; font-family:var(--f-mono); font-size:16px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; padding-bottom:6px; border-bottom:2px solid var(--ink); }
+
+.chips { display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; }
+.chipcard { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; align-items:center; }
+.chipcard svg { width:150px; height:96px; }
+.chipcard .nm { font-size:19px; font-weight:500; text-align:center; }
+.chipcard .opts { display:flex; gap:6px; }
+.chipcard .opts button { font-size:15px; padding:5px 9px; }
+.chipcard .opts button.right { background:var(--good); color:#fff; border-color:var(--good); }
+.chipcard .opts button.wrong { background:var(--bad); color:#fff; border-color:var(--bad); }
+.chipcard .fb { font-size:15px; color:var(--muted); text-align:center; min-height:40px; line-height:1.3; }
+
+table.eval td:first-child { font-weight:500; }
+table.eval td.inst { font-family:var(--f-mono); font-size:18px; color:var(--blue); }
+
+
+/* ===========================================================
+   CHAPTER 4 ADDITIONS
+   =========================================================== */
+.ctrl { grid-template-columns: 200px 1fr 150px; }
+table.l9 { width:100%; border-collapse:collapse; font-family:var(--f-mono); font-size:19px; font-variant-numeric:tabular-nums; }
+table.l9 th, table.l9 td { padding:6px 10px; border-bottom:1px solid var(--rule); text-align:right; }
+table.l9 th { font-size:15px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+table.l9 td:first-child, table.l9 th:first-child { text-align:left; color:var(--muted); }
+table.l9 tr.hl td { background:color-mix(in srgb, var(--bronze) 14%, transparent); }
+table.l9 td.resp { color:var(--blue); }
+.lvl { display:grid; grid-template-columns: 110px repeat(3, 1fr); gap:8px; align-items:center; font-size:19px; }
+.lvl .lab { color:var(--muted); font-family:var(--f-mono); font-size:16px; }
+.lvl button { font-family:var(--f-mono); font-size:17px; padding:6px 8px; }
+.matrix { display:grid; grid-template-columns: 150px repeat(6, 1fr); gap:6px; }
+.matrix .mh { font-family:var(--f-mono); font-size:15px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; text-align:center; padding:6px 0; }
+.matrix .rh { font-family:var(--f-display); font-weight:650; font-size:23px; display:flex; align-items:center; }
+.cell { font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:5px; padding:10px 4px; text-align:center; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; transition:border-color .2s, background .2s; }
+.cell .ar { font-family:var(--f-mono); font-size:30px; line-height:1; }
+.cell .st { font-size:13px; color:var(--muted); }
+.cell:hover { border-color:var(--bronze); }
+.cell[aria-pressed="true"] { border-color:var(--ink); background:color-mix(in srgb, var(--straw) 16%, var(--sheet)); }
+.cell.up .ar { color:var(--bad); } .cell.dn .ar { color:var(--good); } .cell.mix .ar { color:var(--violet); } .cell.nil .ar { color:var(--muted); }
+.notice { border:2px solid var(--bad); border-radius:6px; padding:22px 26px; display:flex; flex-direction:column; gap:10px; background:color-mix(in srgb, var(--bad) 6%, var(--sheet)); }
+.notice .tag { font-family:var(--f-mono); font-size:18px; letter-spacing:.08em; text-transform:uppercase; color:var(--bad); }
+.check { display:flex; flex-direction:column; gap:10px; }
+.check label { display:flex; gap:14px; align-items:flex-start; font-size:21px; cursor:pointer; }
+.check input { width:24px; height:24px; accent-color:var(--good); margin-top:3px; flex:none; }
+.addcard { text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:14px 16px; cursor:pointer; display:flex; flex-direction:column; gap:4px; }
+.addcard b { font-family:var(--f-mono); font-size:30px; color:var(--bronze); }
+.addcard span { font-size:17px; color:var(--muted); }
+.addcard[aria-pressed="true"] { border-color:var(--ink); box-shadow: inset 0 -4px 0 var(--bronze); }
+.adds { display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; }
+.htgrid { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+.rank { display:flex; flex-direction:column; gap:8px; }
+.rank .rr { display:grid; grid-template-columns: 220px 1fr 1fr 1fr; gap:8px; align-items:center; font-size:19px; }
+.rank .rr .h { font-family:var(--f-mono); font-size:15px; color:var(--muted); text-transform:uppercase; text-align:center; }
+.pill { font-family:var(--f-mono); font-size:16px; padding:6px 8px; border-radius:4px; text-align:center; background:var(--rule); }
+.pill.p1 { background:var(--bad); color:#fff; } .pill.p2 { background:color-mix(in srgb, var(--bad) 45%, var(--sheet)); } .pill.p3 { background:var(--rule); color:var(--muted); }
+
+
+/* ===========================================================
+   CHAPTER 5 ADDITIONS
+   =========================================================== */
+.pipe { display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; }
+.step { position:relative; text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:16px 14px 14px; cursor:pointer; display:flex; flex-direction:column; gap:6px; min-height:150px; transition:border-color .2s; }
+.step .sn { font-family:var(--f-mono); font-size:16px; color:var(--bronze); }
+.step .st { font-family:var(--f-display); font-weight:650; font-size:22px; line-height:1.15; }
+.step .si { font-size:16px; color:var(--muted); line-height:1.3; }
+.step::after { content:"→"; position:absolute; right:-14px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:20px; z-index:2; }
+.step:last-child::after { content:""; }
+.step[aria-pressed="true"] { border-color:var(--ink); box-shadow: inset 0 -4px 0 var(--bronze); }
+.hot { cursor:pointer; transition: opacity .2s; }
+.hotwrap.focus .hot { opacity:.3; }
+.hotwrap.focus .hot.on { opacity:1; }
+.wcards { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+.wcard { text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:10px 12px; cursor:pointer; display:flex; gap:12px; align-items:center; }
+.wcard svg { width:84px; height:64px; flex:none; }
+.wcard b { font-family:var(--f-display); font-size:20px; font-weight:650; }
+.wcard[aria-pressed="true"] { border-color:var(--ink); box-shadow: inset 4px 0 0 var(--bronze); }
+.crit { display:flex; flex-direction:column; gap:8px; }
+.crit .ci { display:grid; grid-template-columns: 34px 1fr auto; gap:12px; align-items:center; padding:10px 14px; border:1px solid var(--rule); border-radius:5px; background:var(--sheet); font-size:21px; }
+.crit .ci .dot { width:22px; height:22px; border-radius:50%; background:var(--rule); }
+.crit .ci.hit { border-color:var(--bad); background:color-mix(in srgb, var(--bad) 10%, var(--sheet)); }
+.crit .ci.hit .dot { background:var(--bad); }
+.crit .ci .val { font-family:var(--f-mono); font-size:19px; }
+#micSvg { cursor:crosshair; }
+.tbl-sm { width:100%; border-collapse:collapse; font-size:19px; }
+.tbl-sm th, .tbl-sm td { padding:7px 10px; border-bottom:1px solid var(--rule); text-align:left; }
+.tbl-sm th { font-family:var(--f-mono); font-size:15px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.05em; }
+.tbl-sm td.m { font-family:var(--f-mono); font-variant-numeric:tabular-nums; }
+.tbl-sm tr.on td { background:color-mix(in srgb, var(--bronze) 14%, transparent); }
+.tbl-sm tr { cursor:pointer; }
+.methods { display:grid; grid-template-columns: repeat(2, 1fr); gap:14px; }
+.meth { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:16px 18px; display:flex; flex-direction:column; gap:8px; }
+.meth .mh { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.meth .mh b { font-family:var(--f-display); font-size:22px; font-weight:650; }
+.tags { display:flex; gap:6px; flex-wrap:wrap; }
+.tags span { font-family:var(--f-mono); font-size:14px; padding:3px 8px; border-radius:3px; background:var(--rule); color:var(--ink); }
+.tags span.g { background:color-mix(in srgb, var(--good) 22%, var(--sheet)); }
+.tags span.r { background:color-mix(in srgb, var(--bad) 18%, var(--sheet)); }
+.sheet2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px 30px; }
+
+
+/* ===========================================================
+   CHAPTER 6 ADDITIONS — original figures are shown unaltered
+   =========================================================== */
+.fig { margin:0; background:#ffffff; border:1px solid var(--rule); border-radius:6px; padding:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-height:0; min-width:0; overflow:hidden; }
+.fig img { display:block; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
+.fig figcaption { font-family:var(--f-mono); font-size:14px; color:#556370; align-self:flex-start; }
+.fig.fill { flex:1; }
+.figrow { display:flex; gap:20px; min-height:0; }
+.figrow .fig { flex:1; }
+.hs { position:relative; width:100%; }
+.hs img { width:100%; height:auto; max-height:none; }
+.hs svg { position:absolute; inset:0; width:100%; height:100%; max-width:none; max-height:none; }
+.hs .hz { fill:transparent; stroke:transparent; stroke-width:4; cursor:pointer; transition:fill .2s, stroke .2s; }
+.hs .hz:hover { stroke:#A8621C; }
+.hs .hz.on { fill:rgba(201,154,46,.22); stroke:#A8621C; }
+.ftabs { display:flex; gap:8px; flex-wrap:wrap; }
+.aims { display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; }
+.aim { text-align:left; font:inherit; color:inherit; background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:16px; cursor:pointer; display:flex; flex-direction:column; gap:6px; min-height:120px; }
+.aim .ai { font-family:var(--f-mono); font-size:15px; color:var(--bronze); }
+.aim b { font-family:var(--f-display); font-size:21px; font-weight:650; line-height:1.15; }
+.aim[aria-pressed="true"] { border-color:var(--ink); box-shadow: inset 0 -4px 0 var(--bronze); }
+.quote { font-size:23px; line-height:1.45; }
+.quote p + p { margin-top:10px; }
+.def { display:flex; flex-direction:column; gap:12px; }
+.def .dt { font-family:var(--f-mono); font-size:22px; color:var(--bronze); font-weight:600; }
+.lays { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
+.lay { background:var(--sheet); border:1px solid var(--rule); border-radius:6px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; align-items:center; }
+.lay svg { width:150px; height:110px; }
+.lay .opts { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; }
+.lay .opts button { font-family:var(--f-mono); font-size:17px; padding:4px 10px; }
+.lay .opts button.right { background:var(--good); color:#fff; border-color:var(--good); }
+.lay .opts button.wrong { background:var(--bad); color:#fff; border-color:var(--bad); }
+.lay .fb { font-size:15px; color:var(--muted); min-height:20px; text-align:center; }
+input.txt { font-family:var(--f-mono); font-size:21px; padding:10px 12px; border:1px solid var(--rule); border-radius:4px; background:var(--sheet); color:var(--ink); width:100%; }
+.mats { display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; }
+.mats button { font-size:18px; padding:8px 10px; text-align:left; }
+.pill.easy { background:color-mix(in srgb, var(--good) 25%, var(--sheet)); color:var(--ink); }
+.pill.mod { background:color-mix(in srgb, var(--straw) 35%, var(--sheet)); color:var(--ink); }
+.pill.hard { background:color-mix(in srgb, var(--bad) 25%, var(--sheet)); color:var(--ink); }
+[hidden]{display:none !important}
+
+/* ---------- Chapter 8 additions ---------- */
+.vids { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+.vid { display:flex; flex-direction:column; gap:8px; padding:22px; border:1px solid var(--rule); border-radius:12px; background:var(--sheet); color:var(--ink); text-decoration:none; transition:border-color .2s, transform .2s; }
+.vid:hover, .vid:focus-visible { border-color:var(--bronze); transform:translateY(-2px); }
+.vid .tag { font-family:'IBM Plex Mono',monospace; font-size:15px; color:var(--bronze); text-transform:uppercase; letter-spacing:.06em; }
+.vid .t { font-family:'Archivo',sans-serif; font-size:26px; font-weight:700; }
+.vid .u { font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--muted); word-break:break-all; }
+.vid::before { content:"▶"; display:grid; place-items:center; width:56px; height:56px; border-radius:50%; background:var(--bronze); color:#fff; font-size:22px; margin-bottom:6px; }
+.chainblk { cursor:pointer; }
+.chainblk rect { fill:var(--sheet); stroke:var(--rule); stroke-width:2; transition:fill .2s, stroke .2s; }
+.chainblk.on rect { fill:color-mix(in srgb, var(--straw) 30%, var(--sheet)); stroke:var(--bronze); stroke-width:3; }
+.chainblk text { fill:var(--ink); }
+.farrow { cursor:pointer; }
+.farrow .hit { stroke:transparent; stroke-width:28; }
+.fig.tall img { max-height:100%; }
+
+</style></head><body>
+<div class="progress" id="progress" style="width:0"></div>
+<div class="deck-viewport"><main class="deck-stage" id="deckStage">
+<!-- ======================= 1 · TITLE ======================= -->
+<section class="slide active visible" data-label="Title">
+  <div class="title-wrap">
+    <div class="title-left">
+      <div class="eyebrow reveal">Assessment of Machinability · Chapter 8</div>
+      <h1 class="reveal">Cutting<span>force</span></h1>
+      <div class="course reveal">
+        <div class="code">MMT15603</div>
+        <div class="meta">Faculty of Mechanical Engineering &amp; Technology, UniMAP<br>Force components · Kienzle model · dynamometry · speed, feed, coating and cryogenic effects</div>
+      </div>
+    </div>
+    <div class="title-right">
+      <svg id="heroF" viewBox="0 0 700 440" width="700" height="440" role="img" aria-label="A turning tool with the three cutting force components drawn as arrows"></svg>
+      <p class="small">The workpiece resists the tool. That resistance, resolved along three axes, is what a dynamometer measures and what decides power, deflection, heat and tool life.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 2 · OUTLINE ======================= -->
+<section class="slide" data-label="Outline">
+  <aside class="rail"><span class="no">02</span><span class="lab">Outline</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Lecture outline</div><h2>Where the force comes from, how we measure it, and what changes it.</h2></div>
+    <div class="roadmap reveal" style="grid-template-columns:1fr 1fr 1fr;flex:1">
+      <button class="stop" data-go="2"><span class="n">03–06</span><span class="t">Forces &amp; models</span><span class="d">Factors that influence force; measurement options; Fc, Ff, Fp on a turning tool; Kienzle calculator.</span></button>
+      <button class="stop" data-go="6"><span class="n">07–11</span><span class="t">Measuring force</span><span class="d">Dynamometer chain; piezo signal and amplifier range; experimental data explorer; milling forces; reading force traces.</span></button>
+      <button class="stop" data-go="11"><span class="n">12–14</span><span class="t">Speed, feed, coating</span><span class="d">Thermal softening; why feed matters more than speed; friction of coated and uncoated inserts.</span></button>
+      <button class="stop" data-go="14"><span class="n">15–17</span><span class="t">Cooling &amp; materials</span><span class="d">Two-nozzle LN<sub>2</sub> system; cryogenic force results; composites and fibre angle.</span></button>
+      <button class="stop" data-go="17"><span class="n">18</span><span class="t">Videos</span><span class="d">Kistler dynamometer and turning-force demonstrations.</span></button>
+      <button class="stop" data-go="18"><span class="n">19–20</span><span class="t">Self-check &amp; references</span><span class="d">Six questions, sources.</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 3 · INTRODUCTION + FISHBONE ======================= -->
+<section class="slide" data-label="Introduction">
+  <aside class="rail"><span class="no">03</span><span class="lab">Introduction</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Introduction · anatomy of the influences</div><h2>Six groups of factors push on the cutting force. Click a group on the figure.</h2></div>
+    <div class="grid-4-6">
+      <div class="col reveal quote">
+        <p>The cutting force occurs, during the cutting process, due to resistance of workpiece material.</p>
+        <p>Cutting force in turning is influenced by varying amounts of factors such as cutting parameters, tool related parameters, properties of workpiece material and environment parameters.</p>
+        <p>A great deal of research has been performed to quantify the effect of these parameters on cutting force. Figure 1 shows the influential factors on cutting force.</p>
+        <div class="panel defbox" id="fbDef" aria-live="polite" style="min-height:250px"></div>
+      </div>
+      <div class="col reveal">
+        <figure class="fig"><div class="hs"><img src="img/ch7/fishbone.jpg" alt="Fig. 1 Cause and effects diagram of factors that influence the cutting force"><svg id="fbHs" viewBox="0 0 1382 1232" preserveAspectRatio="none" aria-label="Clickable factor groups"></svg></div></figure>
+        <div class="partlist" id="fbList" style="grid-template-columns:repeat(3,1fr)"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 4 · MEASUREMENT METHODS ======================= -->
+<section class="slide" data-label="Measurement methods">
+  <aside class="rail"><span class="no">04</span><span class="lab">Measurement</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Ways to measure cutting force</div><h2>Six ways to turn force into a signal. Pick one and push the force.</h2></div>
+    <div class="grid-4-6" style="grid-template-columns:3.1fr 6.9fr">
+      <div class="col reveal" style="gap:12px">
+        <figure class="fig" style="flex:1"><img src="img/ch7/methods.jpg" alt="Table comparing measuring technologies: current, voltage, strain gauge, capacitive, optoelectronic, piezoelectric"></figure>
+        <div class="panel">
+          <span class="eyebrow">Which would you choose?</span>
+          <div class="ftabs" id="mmScen" style="margin-top:8px;flex-direction:column;align-items:stretch"></div>
+          <p id="mmAns" style="font-size:16px;margin-top:8px" aria-live="polite"></p>
+        </div>
+      </div>
+      <div class="col reveal" style="gap:12px">
+        <div class="ftabs" id="mmList"></div>
+        <div class="panel" style="display:flex;flex-direction:column;gap:6px;padding:14px 18px">
+          <svg id="mmSvg" viewBox="0 0 1100 360" width="100%" height="330" role="img" aria-label="How the selected sensor technology turns force into a signal"></svg>
+          <div class="ctrl"><label for="mmF">Cutting force F<sub>c</sub></label><input type="range" id="mmF" min="0" max="2000" step="10" value="1000"><output id="mmFo"></output></div>
+        </div>
+        <div class="panel defbox" id="mmDef" aria-live="polite" style="flex:1"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 5 · TURNING FORCE ANATOMY ======================= -->
+<section class="slide" data-label="Turning force components">
+  <aside class="rail"><span class="no">05</span><span class="lab">Forces</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Turning cutting force · anatomy</div><h2>One resultant force, three components. Click an arrow to see what it does.</h2></div>
+    <div class="grid2">
+      <div class="col reveal">
+        <figure class="fig" style="height:330px"><img src="img/ch7/turning.jpg" alt="Components of the cutting force in turning"></figure>
+        <div class="quote" style="font-size:20px">
+          <p><b>Fc</b>, main cutting force (tangential force), acting on the rake face of the tool in the direction of motion of the workpiece;</p>
+          <p><b>Ff</b>, feed force (axial force), acting on the tool in the direction of tool movement;</p>
+          <p><b>Fp</b>, passive force (radial force), acting on the tool in the radial direction, normal to the machined surface.</p>
+        </div>
+      </div>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <svg id="tfSvg" viewBox="0 0 860 440" width="100%" height="440" role="img" aria-label="Interactive tool with force arrows"></svg>
+        <div class="ctrl"><label for="tfC">F<sub>c</sub> (N)</label><input type="range" id="tfC" min="100" max="2000" step="10" value="1671"><output id="tfCo"></output></div>
+        <div class="ctrl"><label for="tfF">F<sub>f</sub> (N)</label><input type="range" id="tfF" min="50" max="1000" step="10" value="702"><output id="tfFo"></output></div>
+        <div class="ctrl"><label for="tfP">F<sub>p</sub> (N)</label><input type="range" id="tfP" min="50" max="1000" step="10" value="475"><output id="tfPo"></output></div>
+        <p id="tfTxt" style="font-size:19px" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 6 · KIENZLE ======================= -->
+<section class="slide" data-label="Kienzle calculator">
+  <aside class="rail"><span class="no">06</span><span class="lab">Forces</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Estimating F<sub>c</sub> before you cut</div><h2>Force = specific cutting force × chip area. Thin chips cost more per mm².</h2></div>
+    <div class="grid-6-4">
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <div class="ftabs" id="kzMat" style="flex-wrap:wrap"></div>
+        <div class="ctrl"><label for="kzAp">Depth of cut a<sub>p</sub></label><input type="range" id="kzAp" min="0.2" max="6" step="0.1" value="1.5"><output id="kzApo"></output></div>
+        <div class="ctrl"><label for="kzF">Feed f</label><input type="range" id="kzF" min="0.05" max="0.8" step="0.01" value="0.3"><output id="kzFo"></output></div>
+        <div class="ctrl"><label for="kzK">Entering angle κ</label><input type="range" id="kzK" min="30" max="95" step="1" value="95"><output id="kzKo"></output></div>
+        <div class="ctrl"><label for="kzV">Cutting speed v<sub>c</sub></label><input type="range" id="kzV" min="20" max="400" step="5" value="150"><output id="kzVo"></output></div>
+        <svg id="kzSvg" viewBox="0 0 960 200" width="100%" height="200" role="img" aria-label="Chip cross-section"></svg>
+        <div class="readouts" style="grid-template-columns:repeat(5,1fr)">
+          <div><span class="k">h = f sin κ</span><span class="v" id="kzH"></span><span class="u">mm</span></div>
+          <div><span class="k">b = a<sub>p</sub>/sin κ</span><span class="v" id="kzB"></span><span class="u">mm</span></div>
+          <div><span class="k">k<sub>c</sub></span><span class="v" id="kzKc"></span><span class="u">N/mm²</span></div>
+          <div><span class="k">F<sub>c</sub></span><span class="v" id="kzFc"></span><span class="u">N</span></div>
+          <div style="border-right:none"><span class="k">P<sub>c</sub> = F<sub>c</sub>v<sub>c</sub></span><span class="v" id="kzP"></span><span class="u">kW</span></div>
+        </div>
+      </div>
+      <div class="col reveal">
+        <div class="panel"><span class="eyebrow">Kienzle model</span>
+          <p style="font-size:24px;margin:8px 0;font-family:'IBM Plex Mono',monospace">k<sub>c</sub> = k<sub>c1.1</sub> · h<sup>−m<sub>c</sub></sup><br>F<sub>c</sub> = k<sub>c</sub> · b · h = k<sub>c1.1</sub> · b · h<sup>1−m<sub>c</sub></sup></p>
+          <p style="font-size:19px">k<sub>c1.1</sub> is the force for a chip 1 mm wide and 1 mm thick; m<sub>c</sub> (about 0.2–0.3) says how fast k<sub>c</sub> rises as the chip gets thinner.</p><p class="small" id="kzNote" style="margin-top:6px"></p></div>
+        <div class="ev"><span class="what">Evidence · Kienzle in turning</span><p style="font-size:19px">The cutting force equals the specific cutting force times the chip cross-section, F<sub>c</sub> = k<sub>c</sub>·A, with A = b·h.</p><span class="cite">Tseng et al. (2021)</span></div>
+        <div class="ev"><span class="what">Evidence · thinner chips</span><p style="font-size:19px">Measured with a dynamometer, the specific cutting force fell as feed per tooth increased.</p><span class="cite">Janota et al. (2019)</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 7 · MEASUREMENT SETUP ======================= -->
+<section class="slide" data-label="Measurement setup">
+  <aside class="rail"><span class="no">07</span><span class="lab">Measurement</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Measurement setup · anatomy of the chain</div><h2>From tool tip to graph in four steps. Click each block.</h2></div>
+    <div class="grid-4-6">
+      <div class="col reveal quote">
+        <p>The cutting forces were measured with a three-component force dynamometer Kistler type 9441, mounted on the lathe via a custom designed adapter for the tool holder creating a very rigid tooling fixture.</p>
+        <p>The charge signal generated at the dynamometer was amplified using amplifier Kistler type 5007A.</p>
+        <p>The amplified signal was acquired and sampled using computer. Before conducting the measurements all the measuring instruments were calibrated.</p>
+      </div>
+      <div class="col reveal">
+        <div class="panel"><svg id="chSvg" viewBox="0 0 1000 300" width="100%" height="300" role="img" aria-label="Measurement chain: dynamometer, charge amplifier, data acquisition, computer"></svg></div>
+        <div class="panel defbox" id="chDef" aria-live="polite" style="min-height:250px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 8 · PIEZO SIGNAL ======================= -->
+<section class="slide" data-label="Charge amplifier range">
+  <aside class="rail"><span class="no">08</span><span class="lab">Measurement</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Setting the charge amplifier</div><h2>Pick a range that fills the ±10 V output without clipping the peaks.</h2></div>
+    <div class="grid2">
+      <figure class="fig reveal"><img src="img/ch7/usmill.jpg" alt="Ultrasonic vibration milling set-up with a Kistler 9257B dynamometer, charge amplifier and data acquisition"><figcaption>Original slide: the same chain on a milling machine (Kistler 9257B)</figcaption></figure>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <div class="ctrl"><label for="pzF">Peak force</label><input type="range" id="pzF" min="50" max="3000" step="10" value="1200"><output id="pzFo"></output></div>
+        <div class="ctrl"><label for="pzS">Sensitivity</label><input type="range" id="pzS" min="2" max="10" step="0.1" value="7.5"><output id="pzSo"></output></div>
+        <div class="ftabs" id="pzR" style="flex-wrap:wrap"></div>
+        <svg id="pzSvg" viewBox="0 0 860 300" width="100%" height="300" role="img" aria-label="Amplifier output signal"></svg>
+        <div class="readouts" style="grid-template-columns:repeat(3,1fr)">
+          <div><span class="k">charge q = S·F</span><span class="v" id="pzQ"></span><span class="u">pC (magnitude)</span></div>
+          <div><span class="k">output peak</span><span class="v" id="pzV"></span><span class="u">V of ±10 V</span></div>
+          <div style="border-right:none"><span class="k">scale</span><span class="v" id="pzSc"></span><span class="u">N per volt</span></div>
+        </div>
+        <p id="pzTxt" style="font-size:19px" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 9 · TABLE 3 EXPLORER ======================= -->
+<section class="slide" data-label="Experimental data">
+  <aside class="rail"><span class="no">09</span><span class="lab">Data</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Interactive · Table 3, 36 turning trials</div><h2>Plot the measured forces, then fit a power law to find which input matters most.</h2></div>
+    <div class="grid-4-6" style="grid-template-columns:3fr 7fr">
+      <figure class="fig reveal"><img src="img/ch7/table3.jpg" alt="Table 3 Experimental data: depth of cut, speed, feed, entering angle and three force components for 36 trials"></figure>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+          <span class="eyebrow">x-axis</span><div class="ftabs" id="t3X"></div>
+          <span class="eyebrow">force</span><div class="ftabs" id="t3Y"></div>
+        </div>
+        <svg id="t3Svg" viewBox="0 0 960 380" width="100%" height="380" role="img" aria-label="Scatter plot of Table 3 data"></svg>
+        <div class="readouts" style="grid-template-columns:repeat(5,1fr)" id="t3Fit"></div>
+        <p id="t3Txt" style="font-size:19px" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 10 · MILLING FORCES ======================= -->
+<section class="slide" data-label="Milling forces">
+  <aside class="rail"><span class="no">10</span><span class="lab">Forces</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">End milling · DIN 6584 force decomposition</div><h2>In milling the chip thickness changes every degree, so the force does too.</h2></div>
+    <div class="grid2">
+      <div class="col reveal">
+        <div class="ftabs" id="mlTabs"></div>
+        <figure class="fig" id="mlFig" style="flex:1"></figure>
+      </div>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:12px;align-items:center">
+          <svg id="mlCut" viewBox="0 0 340 300" width="340" height="300" role="img" aria-label="Cutter with one tooth and its forces"></svg>
+          <svg id="mlPlot" viewBox="0 0 520 300" width="520" height="300" role="img" aria-label="Forces against engagement angle"></svg>
+        </div>
+        <div class="ctrl"><label for="mlPhi">Tooth angle φ</label><input type="range" id="mlPhi" min="0" max="180" step="1" value="60"><output id="mlPhio"></output></div>
+        <div class="ctrl"><label for="mlFz">Feed per tooth f<sub>z</sub></label><input type="range" id="mlFz" min="0.02" max="0.3" step="0.01" value="0.1"><output id="mlFzo"></output></div>
+        <div class="ctrl"><label for="mlAp">Axial depth a<sub>p</sub></label><input type="range" id="mlAp" min="0.5" max="10" step="0.5" value="4"><output id="mlApo"></output></div>
+        <div class="readouts" style="grid-template-columns:repeat(4,1fr)">
+          <div><span class="k">h = f<sub>z</sub> sin φ</span><span class="v" id="mlH"></span><span class="u">mm</span></div>
+          <div><span class="k">F<sub>c</sub></span><span class="v" id="mlFc"></span><span class="u">N</span></div>
+          <div><span class="k">F<sub>x</sub> (feed)</span><span class="v" id="mlFx"></span><span class="u">N</span></div>
+          <div style="border-right:none"><span class="k">F<sub>y</sub> (normal)</span><span class="v" id="mlFy"></span><span class="u">N</span></div>
+        </div>
+        <p class="small">Slot milling, one tooth in cut, steel with k<sub>c1.1</sub> = 1700 N/mm², m<sub>c</sub> = 0.25, F<sub>cN</sub> = 0.4 F<sub>c</sub>. Illustrative values; axis signs follow one common convention.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 11 · FORCE SIGNALS ======================= -->
+<section class="slide" data-label="Reading force signals">
+  <aside class="rail"><span class="no">11</span><span class="lab">Data</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Reading a force trace</div><h2>A force signal is never a flat line. Decide what number you will report.</h2></div>
+    <div class="grid2">
+      <div class="col reveal">
+        <div class="ftabs" id="sgTabs"></div>
+        <figure class="fig" id="sgFig" style="flex:1"></figure>
+        <p id="sgCap" class="small"></p>
+      </div>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <svg id="sgSvg" viewBox="0 0 860 320" width="100%" height="320" role="img" aria-label="Synthetic force signal with mean, peak and filtered line"></svg>
+        <div class="ctrl"><label for="sgN">Noise / vibration</label><input type="range" id="sgN" min="0" max="1" step="0.05" value="0.4"><output id="sgNo"></output></div>
+        <div class="ctrl"><label for="sgW">Tool wear growth</label><input type="range" id="sgW" min="0" max="1" step="0.05" value="0.2"><output id="sgWo"></output></div>
+        <div class="ctrl"><label for="sgL">Low-pass filter window</label><input type="range" id="sgL" min="1" max="60" step="1" value="15"><output id="sgLo"></output></div>
+        <div class="readouts" style="grid-template-columns:repeat(4,1fr)">
+          <div><span class="k">mean</span><span class="v" id="sgMean"></span><span class="u">N</span></div>
+          <div><span class="k">peak</span><span class="v" id="sgPk"></span><span class="u">N</span></div>
+          <div><span class="k">RMS of fluctuation</span><span class="v" id="sgRms"></span><span class="u">N</span></div>
+          <div style="border-right:none"><span class="k">peak / mean</span><span class="v" id="sgPm"></span><span class="u"></span></div>
+        </div>
+        <p class="small">Synthetic practice signal. Mean for force models; peak for tool and fixture design.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 12 · SPEED ======================= -->
+<section class="slide" data-label="Effect of cutting speed">
+  <aside class="rail"><span class="no">12</span><span class="lab">Speed</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Effect of cutting speed</div><h2>Heat softens the work material, so force falls with speed, until the benefit runs out.</h2></div>
+    <div class="grid-4-6" style="grid-template-columns:45fr 55fr">
+      <div class="col reveal">
+        <div class="ftabs" id="spTabs"></div>
+        <figure class="fig" id="spFig" style="height:430px"></figure>
+        <div class="ftabs" id="spReg" style="flex-wrap:wrap"></div>
+        <p id="spRegTxt" style="font-size:19px" aria-live="polite"></p>
+      </div>
+      <div class="col reveal">
+        <div class="quote" style="font-size:19.5px">
+          <p>Figure 4 shows the variation of cutting force with cutting speed. The cutting force decreases when increasing cutting speed from 100 to 200 m/min, as the cutting temperature increases with cutting speed and high cutting temperature has a softening effect to the workpiece material.</p>
+          <p>However, the cutting force increases when increasing cutting speed from 200 to 300 m/min, as the cutting temperature gradually increases and is close to the melting point of the workpiece material, then effects of the cutting temperature on the cutting force is weakened. It is well known a large number of heat is generated in hard turning.</p>
+          <p>The heat resistance of PCBN tool can be 1,000–1,500 °C, and PCBN has a high hardness in high temperature. It is beneficial to take advantage of the hardness difference between PCBN and GCr15 steel to improve cutting efficiency and tool life.</p>
+        </div>
+        <div class="ev"><span class="what">Evidence · PCBN on GCr15</span><p style="font-size:18px">Cutting speed has a critical value for force; in hard turning of GCr15 with PCBN the radial force can exceed the main cutting force.</p><span class="cite">Li et al. (2018)</span></div>
+        <div class="ev"><span class="what">Evidence · PCBN on a nickel superalloy</span><p style="font-size:18px">Forces fell as speed rose, but above 250 m/min flank wear grew and raised the thrust and feed forces.</p><span class="cite">Chen et al. (2018)</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 13 · FEED ======================= -->
+<section class="slide" data-label="Effect of feed">
+  <aside class="rail"><span class="no">13</span><span class="lab">Feed</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Effect of feed rate</div><h2>Feed has a greater influence than speed: doubling it gives about 1.5 × the force.</h2></div>
+    <div class="grid-4-6" style="grid-template-columns:3fr 3.6fr 3.4fr">
+      <figure class="fig reveal"><img src="img/ch7/feed.jpg" alt="Fig. 5 Feed rate versus cutting force at 100 and 150 m/min"></figure>
+      <div class="col reveal quote" style="font-size:19px">
+        <p>Figure 5 shows the variation of cutting force with feed rate.</p>
+        <p>It is seen that the cutting forces increase with increasing feed rate. Compared with Fig. 4, feed rate has a greater influence on the cutting force than cutting speed.</p>
+        <p>This can be explained by increasing chip cross section with increasing feed rate. With the increasing of feed rate, the material removal rate and plastic deformation rate are increased, resulting in an increasing of the cutting force.</p>
+        <p>PCBN tools are generally used for finish machining, and axial depth of cut is usually small. Therefore, a relative large feed rate is recommended to produce a metal-softening effect.</p>
+        <p>It should be noted that feed rate has a greater influence on cutting force than cutting speed. Doubling the feed rate results in about 1.5 times of the cutting force and makes the actual chip twice as thick thus making it much more difficult to curl and bend.</p>
+      </div>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <h3>Why 1.5 and not 2?</h3>
+        <svg id="fdSvg" viewBox="0 0 560 300" width="100%" height="260" role="img" aria-label="Points read from Fig. 5 with power-law fits"></svg>
+        <div class="ctrl"><label for="fdB">Feed exponent b</label><input type="range" id="fdB" min="0.3" max="1" step="0.01" value="0.6"><output id="fdBo"></output></div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div><span class="k">F ∝ f<sup>b</sup>: doubling f</span><span class="v" id="fdR"></span><span class="u">× force</span></div>
+          <div style="border-right:none"><span class="k">k<sub>c</sub> change</span><span class="v" id="fdK"></span><span class="u">× per mm²</span></div>
+        </div>
+        <p id="fdTxt" style="font-size:18px" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 14 · COATED VS UNCOATED ======================= -->
+<section class="slide" data-label="Coated and uncoated tools">
+  <aside class="rail"><span class="no">14</span><span class="lab">Coating</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Coated vs uncoated carbide</div><h2>Lower friction on the rake face means a lower cutting force.</h2></div>
+    <div class="grid-4-6" style="grid-template-columns:3fr 3.6fr 3.4fr">
+      <figure class="fig reveal"><img src="img/ch7/coated.jpg" alt="Cutting force against cutting speed for uncoated and coated carbide inserts"></figure>
+      <div class="col reveal">
+        <div class="ftabs" id="ctTabs"></div>
+        <div class="quote" id="ctTxt" style="font-size:19px"></div>
+      </div>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <h3>Friction → force (Merchant)</h3>
+        <svg id="ctSvg" viewBox="0 0 560 230" width="100%" height="230" role="img" aria-label="Bars comparing predicted cutting force for two friction coefficients"></svg>
+        <div class="ctrl"><label for="ctU">μ uncoated</label><input type="range" id="ctU" min="0.2" max="1" step="0.01" value="0.7"><output id="ctUo"></output></div>
+        <div class="ctrl"><label for="ctC">μ coated</label><input type="range" id="ctC" min="0.2" max="1" step="0.01" value="0.47"><output id="ctCo"></output></div>
+        <div class="ctrl"><label for="ctA">Rake angle α</label><input type="range" id="ctA" min="-10" max="20" step="1" value="0"><output id="ctAo"></output></div>
+        <p id="ctOut" style="font-size:18px" aria-live="polite"></p>
+        <p class="small">φ = 45° + α/2 − β/2, β = tan⁻¹μ, F<sub>c</sub> ∝ cos(β−α) / [sin φ · cos(φ+β−α)]. An idealised orthogonal model.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 15 · LN2 NOZZLE ANATOMY ======================= -->
+<section class="slide" data-label="Cryogenic delivery">
+  <aside class="rail"><span class="no">15</span><span class="lab">Cooling</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Interactive · anatomy of a two-nozzle LN<sub>2</sub> tool</div><h2>Where the liquid nitrogen goes decides which force goes down.</h2></div>
+    <div class="grid-6-4">
+      <div class="figrow reveal">
+        <figure class="fig" style="flex:1.25"><div class="hs"><img src="img/ch7/nozzle.jpg" alt="Fig. 3 Assembly of two-nozzle LN2 delivery system"><svg id="nzHs" viewBox="0 0 1348 1154" preserveAspectRatio="none" aria-label="Clickable nozzle parts"></svg></div></figure>
+        <figure class="fig" style="flex:1"><img src="img/ch7/nozphoto.jpg" alt="Fig. 4 Photo of the nozzles and tool assembly"></figure>
+      </div>
+      <div class="col reveal">
+        <div class="partlist" id="nzList"></div>
+        <div class="panel defbox" id="nzDef" aria-live="polite" style="min-height:220px"></div>
+        <p class="quote" style="font-size:19px">The more liquid nitrogen is used the lower the cutting temperature. As our material study on cryogenic machining shows, when the temperature is lower the workpiece material becomes stronger and harder [12], and in turn, the cutting forces increase.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 16 · CRYO RESULTS ======================= -->
+<section class="slide" data-label="Cryogenic force results">
+  <aside class="rail"><span class="no">16</span><span class="lab">Cooling</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Cutting forces vs cryogenic cooling approach</div><h2>Cooling raised the cutting force slightly but cut the feed force.</h2></div>
+    <div class="grid-4-6" style="grid-template-columns:3.2fr 3.4fr 3.4fr">
+      <figure class="fig reveal"><img src="img/ch7/cryobars.jpg" alt="Fig. 5 Cutting forces in different cooling condition at 1.5 m/s"></figure>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <div class="ftabs" id="cbF"></div>
+        <svg id="cbSvg" viewBox="0 0 560 380" width="100%" height="290" role="img" aria-label="Percentage change of force against dry cutting"></svg>
+        <p id="cbTxt" style="font-size:18px" aria-live="polite"></p>
+        <div class="ev"><span class="what">Evidence · cryogenic CO<sub>2</sub> milling of Ti-6Al-4V</span><p style="font-size:17px">Cooling reduced tool–workpiece friction, but the cutting force increased because of the higher shear resistance of the colder material.</p><span class="cite">Kummamkandath et al. (2019)</span></div>
+      </div>
+      <div class="col reveal quote" style="font-size:16.5px;gap:8px">
+        <p>It is interesting to note that in cryogenic machining the feed force, which is closely related to the frictional force of the chip acting on the tool, decreased.</p>
+        <p>The lowest feed force is for cooling the rake using only the primary nozzle. At lower temperatures, the material became harder and less sticky, and the friction force smaller, especially cooling the rake by releasing LN2 to the chip and tool interface area. Under these conditions, LN2 may form a gas and liquid cushion enhancing its lubrication effect.</p>
+        <p>The feed force reduction indicated that in the direction of chip flow the friction force reduction was more than the cutting force increase. When both nozzles were on, it has the benefit of the lubrication cushion effect, therefore it has lower feed force than flank cooling.</p>
+        <p>However, the two-nozzle mode had higher feed force than the primary nozzle mode, because of higher cutting force resulting from lower material temperature, which increased the material strength.</p>
+        <div class="ev"><span class="what">Evidence · too cold can hurt</span><p style="font-size:17px">Lower temperature can reduce forces by limiting adhesion, yet the strongest cooling gave relatively high passive forces.</p><span class="cite">Stampfer et al. (2020)</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 17 · COMPOSITES ======================= -->
+<section class="slide" data-label="Composites and fibre angle">
+  <aside class="rail"><span class="no">17</span><span class="lab">Materials</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Composites · drilling and milling CFRP</div><h2>In fibre composites the force depends on the angle at which the edge meets the fibres.</h2></div>
+    <div class="grid2">
+      <div class="col reveal">
+        <div class="ftabs" id="fbTabs" style="flex-wrap:wrap"></div>
+        <figure class="fig" id="fbFig" style="flex:1"></figure>
+        <p class="small" id="fbCap"></p>
+      </div>
+      <div class="panel reveal" style="display:flex;flex-direction:column;gap:10px">
+        <svg id="faSvg" viewBox="0 0 860 380" width="100%" height="380" role="img" aria-label="Cutter rotating over unidirectional fibres showing the fibre cutting angle"></svg>
+        <div class="ctrl"><label for="faPhi">Cutter rotation φ</label><input type="range" id="faPhi" min="0" max="180" step="1" value="45"><output id="faPhio"></output></div>
+        <div class="ctrl"><label for="faOr">Fibre orientation</label><input type="range" id="faOr" min="0" max="135" step="45" value="0"><output id="faOro"></output></div>
+        <p id="faTxt" style="font-size:19px" aria-live="polite"></p>
+        <p class="small">Read from the original figures: forces are lowest near θ ≈ 45° and rise to a maximum at larger fibre cutting angles, where fibres are bent before they break.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 18 · VIDEOS ======================= -->
+<section class="slide" data-label="Videos">
+  <aside class="rail"><span class="no">18</span><span class="lab">Videos</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Video links</div><h2>Watch a dynamometer at work, then look for Fc, Ff and Fp.</h2></div>
+    <div class="vids reveal">
+      <a class="vid" href="https://www.youtube.com/watch?v=lM_gDjTAM-0&amp;t=97s" target="_blank" rel="noopener"><span class="tag">Kistler dynamometer · 1</span><span class="t">Dynamometer demonstration</span><span class="u">youtube.com/watch?v=lM_gDjTAM-0</span></a>
+      <a class="vid" href="https://www.youtube.com/watch?v=sULoCx-XGjE" target="_blank" rel="noopener"><span class="tag">Kistler dynamometer · 2</span><span class="t">Dynamometer demonstration</span><span class="u">youtube.com/watch?v=sULoCx-XGjE</span></a>
+      <a class="vid" href="https://www.youtube.com/watch?v=2o55WvdrbLo" target="_blank" rel="noopener"><span class="tag">Kistler dynamometer · 3</span><span class="t">Dynamometer demonstration</span><span class="u">youtube.com/watch?v=2o55WvdrbLo</span></a>
+      <a class="vid" href="https://www.youtube.com/watch?v=kk60zREPqX4" target="_blank" rel="noopener"><span class="tag">Turning cutting force</span><span class="t">Turning force demonstration</span><span class="u">youtube.com/watch?v=kk60zREPqX4</span></a>
+    </div>
+    <div class="panel reveal"><span class="eyebrow">While you watch</span>
+      <ol style="font-size:21px;margin:8px 0 0 24px;line-height:1.5">
+        <li>Where is the dynamometer mounted, and how is the tool clamped to it?</li>
+        <li>Which force is largest on the screen? Does that match slide 5?</li>
+        <li>What happens to the signal when the tool enters and leaves the cut?</li>
+      </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 19 · QUIZ ======================= -->
+<section class="slide" data-label="Self-check">
+  <aside class="rail"><span class="no">19</span><span class="lab">Self-check</span><span class="temper"></span></aside>
+  <div class="frame">
+    <div class="head reveal"><div class="eyebrow">Check your understanding</div><h2>Six questions. Pick an answer to see the reasoning.</h2></div>
+    <div class="quiz reveal" id="quiz"></div>
+    <div class="hint reveal" id="quizScore" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ======================= 20 · REFERENCES ======================= -->
+<section class="slide" data-label="References">
+  <aside class="rail"><span class="no">20</span><span class="lab">References</span><span class="temper"></span></aside>
+  <div class="frame" style="gap:24px">
+    <div class="head"><div class="eyebrow">Sources</div><h2 style="font-size:56px">References</h2></div>
+    <ul class="refs" style="font-size:17.5px">
+      <li>Chen, Z., Peng, R. L., Zhou, J., et al. (2018). Effect of machining parameters on cutting force and surface integrity when high-speed turning AD 730™ with PCBN tools. <i>International Journal of Advanced Manufacturing Technology, 100</i>, 2601–2615. <a href="https://doi.org/10.1007/s00170-018-2792-1" target="_blank" rel="noopener">doi:10.1007/s00170-018-2792-1</a></li>
+      <li>Hamadi, B., Yallese, M. A., Boulanouar, L., et al. (2022). A comparative study of the performance of uncoated, PVD, CVD and MTCVD coated carbide inserts in dry turning of AISI 4140 steel. <i>Periodica Polytechnica Mechanical Engineering, 66</i>(4), 314–324. <a href="https://doi.org/10.3311/ppme.18591" target="_blank" rel="noopener">doi:10.3311/ppme.18591</a></li>
+      <li>Janota, M., Kolář, P., Sulitka, M., et al. (2019). Operational method for identification of specific cutting force during milling. <i>MM Science Journal</i>, 3250–3257. <a href="https://doi.org/10.17973/mmsj.2019_11_2019078" target="_blank" rel="noopener">doi:10.17973/mmsj.2019_11_2019078</a></li>
+      <li>Kummamkandath, A., Duchosal, A., Morandeau, A., et al. (2019). Influence of both rake and flank faces metal working fluid strategies on machinability of Ti-6Al-4V alloy. <i>MM Science Journal</i>, 3114–3121. <a href="https://doi.org/10.17973/mmsj.2019_11_2019059" target="_blank" rel="noopener">doi:10.17973/mmsj.2019_11_2019059</a></li>
+      <li>Li, Q., Jiao, Y., Hu, K., et al. (2018). Research on PCBN tool dry cutting GCr15. <i>Machines, 6</i>(3), 28. <a href="https://doi.org/10.3390/machines6030028" target="_blank" rel="noopener">doi:10.3390/machines6030028</a></li>
+      <li>Seid Ahmed, Y., DePaiva, J. M., Covelli, D., et al. (2017). Investigation of coated cutting tool performance during machining of super duplex stainless steels through 3D wear evaluations. <i>Coatings, 7</i>(8), 127. <a href="https://doi.org/10.3390/coatings7080127" target="_blank" rel="noopener">doi:10.3390/coatings7080127</a></li>
+      <li>Stampfer, B., Golda, P., Schießl, R., et al. (2020). Cryogenic orthogonal turning of Ti-6Al-4V. <i>International Journal of Advanced Manufacturing Technology, 111</i>, 359–369. <a href="https://doi.org/10.1007/s00170-020-06105-z" target="_blank" rel="noopener">doi:10.1007/s00170-020-06105-z</a></li>
+      <li>Tseng, L.-W., Hu, T.-S., Hu, Y.-C. (2021). A smart tool holder calibrated by machine learning for measuring cutting force in fine turning and its application to the specific cutting force of low carbon steel S15C. <i>Machines, 9</i>(9), 190. <a href="https://doi.org/10.3390/machines9090190" target="_blank" rel="noopener">doi:10.3390/machines9090190</a></li>
+      <li style="color:var(--muted)">Figures, Table 3 and the quoted passages are reproduced from the original lecture slides, with their original figure numbers and in-text citations ([12], [13], [26]). Figure images are shown unaltered. Kienzle material values, sensor sensitivity and the milling force ratio are typical illustrative values.</li>
+    </ul>
+  </div>
+</section>
+
+</main></div>
+<nav class="deck-controls" aria-label="Slide navigation"><button id="prevBtn" aria-label="Previous slide">←</button><span id="count">1 / 20</span><button id="nextBtn" aria-label="Next slide">→</button><button id="themeBtn" aria-label="Toggle theme">◐</button></nav>
+<script>
+/* ===========================================================
+   SHARED HELPERS
+   =========================================================== */
+const NS = 'http://www.w3.org/2000/svg';
+const rad = d => d * Math.PI / 180;
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const txt = (parent, x, y, s, attrs = {}) => { const t = el('text', Object.assign({ x, y, 'font-size': 22, fill: 'var(--ink)' }, attrs), parent); t.textContent = s; return t; };
+const pts = arr => arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k];
+// arc centred on c, radius r, from angle a1 to a2 (degrees, SVG screen coords)
+const arcPath = (c, r, a1, a2) => {
+  const p1 = [c[0] + r * Math.cos(rad(a1)), c[1] + r * Math.sin(rad(a1))];
+  const p2 = [c[0] + r * Math.cos(rad(a2)), c[1] + r * Math.sin(rad(a2))];
+  const large = Math.abs(a2 - a1) > 180 ? 1 : 0, sweep = a2 > a1 ? 1 : 0;
+  return `M${p1[0]},${p1[1]} A${r},${r} 0 ${large} ${sweep} ${p2[0]},${p2[1]}`;
+};
+const bindRange = (id, fmt, cb) => {
+  const inp = document.getElementById(id), out = document.getElementById(id + 'o');
+  const run = () => { if (out) out.textContent = fmt(+inp.value); cb(); };
+  inp.addEventListener('input', run);
+  return run;
+};
+
+
+/* ===========================================================
+   LOG-LOG / LINEAR AXES HELPER
+   =========================================================== */
+function axes(svg, o) {
+  // o: {x0,y0,w,h, xmin,xmax,ymin,ymax, xlog,ylog, xlab,ylab, xticks,yticks}
+  const fx = v => o.x0 + (o.xlog ? (Math.log10(v) - Math.log10(o.xmin)) / (Math.log10(o.xmax) - Math.log10(o.xmin)) : (v - o.xmin) / (o.xmax - o.xmin)) * o.w;
+  const fy = v => o.y0 + o.h - (o.ylog ? (Math.log10(v) - Math.log10(o.ymin)) / (Math.log10(o.ymax) - Math.log10(o.ymin)) : (v - o.ymin) / (o.ymax - o.ymin)) * o.h;
+  (o.xticks || []).forEach(t => { const x = fx(t); el('line', { x1: x, y1: o.y0, x2: x, y2: o.y0 + o.h, stroke: 'var(--rule)', 'stroke-width': 1 }, svg); txt(svg, x, o.y0 + o.h + 24, String(t), { 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--muted)' }); });
+  (o.yticks || []).forEach(t => { const y = fy(t); el('line', { x1: o.x0, y1: y, x2: o.x0 + o.w, y2: y, stroke: 'var(--rule)', 'stroke-width': 1 }, svg); txt(svg, o.x0 - 10, y + 5, String(t), { 'text-anchor': 'end', 'font-size': 16, fill: 'var(--muted)' }); });
+  el('rect', { x: o.x0, y: o.y0, width: o.w, height: o.h, fill: 'none', stroke: 'var(--muted)', 'stroke-width': 1.2 }, svg);
+  if (o.xlab) txt(svg, o.x0 + o.w / 2, o.y0 + o.h + 50, o.xlab, { 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--muted)' });
+  if (o.ylab) { const t = txt(svg, 0, 0, o.ylab, { 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--muted)' }); t.setAttribute('transform', `translate(${o.x0 - 62} ${o.y0 + o.h / 2}) rotate(-90)`); }
+  return { fx, fy };
+}
+const clampLine = (svg, pts2, attrs) => el('polyline', Object.assign({ points: pts(pts2), fill: 'none' }, attrs), svg);
+
+
+/* ===========================================================
+   SHARED
+   =========================================================== */
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+const $ = id => document.getElementById(id);
+function tabs(rowId, labels, onPick, first = 0) {
+  const row = $(rowId);
+  const btns = labels.map((l, i) => { const b = document.createElement('button'); b.className = 'chipbtn'; b.innerHTML = l; b.addEventListener('click', () => pick(i)); row.appendChild(b); return b; });
+  function pick(i) { btns.forEach((b, j) => b.setAttribute('aria-pressed', i === j)); onPick(i); }
+  pick(first); return pick;
+}
+function figTabs(tabsId, figId, items, onPick) {
+  const fig = $(figId);
+  return tabs(tabsId, items.map(x => x[0]), i => { fig.innerHTML = `<img src="img/ch7/${items[i][1]}" alt="${items[i][2]}">`; if (onPick) onPick(i); });
+}
+// hotspot figure: zones [{name, box:[x,y,w,h], ...}], list + def box
+function hotspots(svgId, listId, defId, items, render, first = 0) {
+  const svg = $(svgId), list = $(listId), def = $(defId);
+  const zones = items.map((it, i) => (it.boxes || [it.box]).map(([x, y, w, h]) => { const r = el('rect', { x, y, width: w, height: h, rx: 6, class: 'hz', tabindex: 0, role: 'button', 'aria-label': it.name.replace(/<[^>]+>/g, '') }, svg); r.addEventListener('click', () => pick(i)); r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(i); } }); return r; }));
+  const btns = items.map((it, i) => { const b = document.createElement('button'); b.className = 'chipbtn'; b.innerHTML = it.name; b.addEventListener('click', () => pick(i)); list.appendChild(b); return b; });
+  function pick(i) { btns.forEach((b, j) => b.setAttribute('aria-pressed', i === j)); zones.forEach((zs, j) => zs.forEach(z => z.classList.toggle('on', i === j))); def.innerHTML = render(items[i]); }
+  pick(first); return pick;
+}
+const fmt = (v, d = 0) => v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+function arrow(svg, x1, y1, x2, y2, color, w = 5, cls) {
+  const g = el('g', cls ? { class: cls } : {}, svg);
+  const a = Math.atan2(y2 - y1, x2 - x1), L = Math.hypot(x2 - x1, y2 - y1), hs = Math.min(18, L * 0.4);
+  el('line', { x1, y1, x2: x2 - hs * 0.6 * Math.cos(a), y2: y2 - hs * 0.6 * Math.sin(a), stroke: color, 'stroke-width': w, 'stroke-linecap': 'round' }, g);
+  el('polygon', { points: pts([[x2, y2], [x2 - hs * Math.cos(a - 0.4), y2 - hs * Math.sin(a - 0.4)], [x2 - hs * Math.cos(a + 0.4), y2 - hs * Math.sin(a + 0.4)]]), fill: color }, g);
+  return g;
+}
+const COL = { c: 'var(--bad)', f: 'var(--blue)', p: 'var(--good)', r: 'var(--bronze)' };
+
+/* ===========================================================
+   1 — HERO
+   =========================================================== */
+(function () {
+  const svg = $('heroF');
+  const draw = t => {
+    svg.innerHTML = '';
+    el('rect', { x: 40, y: 110, width: 430, height: 200, fill: 'var(--work)' }, svg);
+    el('ellipse', { cx: 40, cy: 210, rx: 40, ry: 100, fill: 'var(--work)', stroke: 'var(--muted)', 'stroke-width': 1.5 }, svg);
+    el('ellipse', { cx: 470, cy: 210, rx: 40, ry: 100, fill: 'var(--sheet)', stroke: 'var(--muted)', 'stroke-width': 1.5 }, svg);
+    for (let i = 0; i < 9; i++) el('line', { x1: 60 + i * 40, y1: 112, x2: 60 + i * 40, y2: 308, stroke: 'var(--muted)', opacity: .25 }, svg);
+    const P = [455, 300];
+    el('polygon', { points: pts([P, [520, 330], [690, 420], [690, 440], [470, 360]]), fill: 'var(--tool)', stroke: 'var(--ink)', 'stroke-width': 1.5 }, svg);
+    const k = 1 + 0.06 * Math.sin(t / 400);
+    arrow(svg, P[0], P[1], P[0], P[1] + 120 * k, COL.c, 6); txt(svg, P[0] - 14, P[1] + 128 * k, 'Fc', { 'text-anchor': 'end', fill: COL.c, 'font-weight': 700 });
+    arrow(svg, P[0], P[1], P[0] + 120 * k * 0.42, P[1], COL.f, 6); txt(svg, P[0] + 56 * k, P[1] - 12, 'Ff', { fill: COL.f, 'font-weight': 700 });
+    arrow(svg, P[0], P[1], P[0] + 70 * k * 0.4, P[1] + 70 * k * 0.4 * 0.55 + 4, COL.p, 6); txt(svg, P[0] + 38, P[1] + 46, 'Fp', { fill: COL.p, 'font-weight': 700 });
+    txt(svg, 250, 90, 'workpiece rotates', { 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--muted)' });
+    txt(svg, 620, 380, 'tool', { 'font-size': 17, fill: 'var(--muted)' });
+  };
+  const loop = t => { if (document.querySelector('.slide.active') === svg.closest('.slide')) draw(t); requestAnimationFrame(loop); };
+  draw(0); requestAnimationFrame(loop);
+})();
+
+/* ===========================================================
+   3 — FISHBONE HOTSPOTS
+   =========================================================== */
+hotspots('fbHs', 'fbList', 'fbDef', [
+  { name: 'Workpiece', box: [160, 14, 250, 70], c: 'heat treatment, grain size, mechanical properties, chemical composition', d: 'Harder and stronger work material needs more force for the same chip. Heat treatment and fine grains raise strength; inclusions such as MnS or lead lower the shear strength and the force.' },
+  { name: 'Tool', box: [500, 14, 214, 70], c: 'chip breaker, edge wear, material, geometry', d: 'A larger positive rake angle and a sharp edge lower the force. Flank wear raises the force, the feed and passive components most. A chip breaker changes the chip contact length and so the friction.' },
+  { name: 'Machine tool', box: [770, 14, 276, 70], c: 'spindle speed, feed, torque, power', d: 'The machine sets the limits: available spindle power must exceed P = F<sub>c</sub>·v<sub>c</sub>, and a stiff machine keeps the force steady instead of vibrating.' },
+  { name: 'Cutting parameters', box: [160, 905, 256, 104], c: 'depth of cut, cutting speed, feed rate', d: 'Depth of cut raises the force almost in proportion; feed raises it less than proportionally; speed acts mainly through temperature (slides 12–13).' },
+  { name: 'Chip', box: [506, 926, 202, 70], c: 'chip cross-section, ratio a<sub>p</sub>/f, chip formation', d: 'The force follows the chip area A = a<sub>p</sub>·f. For the same area, a thin wide chip needs more force per mm² than a thick narrow one (Kienzle, slide 6).' },
+  { name: 'Cooling &amp; lubrication', box: [776, 886, 264, 144], c: 'characteristics, composition, place and way of bringing', d: 'Lubricants lower friction and so the feed force; strong cooling can harden the material and raise the cutting force. Where the fluid is delivered matters (slides 15–16).' },
+], x => `<span class="sym">${x.c}</span><h3>${x.name}</h3><p style="font-size:20px">${x.d}</p>`, 3);
+
+/* ===========================================================
+   4 — MEASUREMENT METHODS · HOW EACH SENSOR WORKS
+   =========================================================== */
+(function () {
+  const M = [
+    { name: 'Current', t: 'indirect', p: 'easy and cheap: read the spindle or feed-drive motor current', c: 'slow; ignores friction in the machine; unsuitable for multi-axis cuts', how: 'More cutting force means more torque on the spindle, so the motor draws more current. The meter also reads the idle current that turns the spindle with no cut (I<sub>0</sub>).' },
+    { name: 'Voltage', t: 'indirect', p: 'wide bandwidth (up to about 4 kHz); easy to process', c: 'only stable conditions; picks up electromagnetic interference', how: 'The drive’s voltage and current give electrical power, P ≈ F<sub>c</sub>·v<sub>c</sub>/η. The signal is fast but rides on electrical noise from the drive.' },
+    { name: 'Strain gauge', t: 'direct', p: 'simple, high and adjustable resolution, reliable', c: 'rigid but fragile; sensitive to temperature; poor repeatability', how: 'The force bends the tool shank. A foil gauge bonded near the clamp stretches, its resistance rises, and a Wheatstone bridge turns that into millivolts.' },
+    { name: 'Capacitive', t: 'direct', p: 'high sensitivity, long-term stability, robust to the environment', c: 'stray capacitance; edge effects', how: 'Force squeezes a spring element and closes the gap d between two plates. Capacitance C = ε₀·A/d rises as the gap shrinks.' },
+    { name: 'Optoelectronic', t: 'direct', p: 'good reliability, wide range, suits workshop conditions', c: 'non-conformable; hard to build dense arrays', how: 'Force deflects a flexure carrying a shutter. The shutter cuts into a light beam, so the photodiode sees less light. Optical signals ignore electrical noise.' },
+    { name: 'Piezoelectric', t: 'direct', p: 'high-frequency response, wide range, high stiffness and accuracy', c: 'charge leakage (drift in static loads); costly', how: 'Squeezing a quartz crystal displaces its ions, so charge appears on its faces: q = d·F (about 2.3 pC/N per quartz plate). A charge amplifier turns it into volts.' },
+  ];
+  const svg = $('mmSvg'), def = $('mmDef'); let cur = 5, ang = 0;
+  const S = (s, o) => el(s, o, svg);
+  const T = (x, y, s, o = {}) => txt(svg, x, y, s, Object.assign({ 'font-size': 18 }, o));
+  const motor = (p, label) => {
+    S('rect', { x: 30, y: 120, width: 190, height: 130, rx: 10, fill: 'var(--sheet)', stroke: 'var(--ink)', 'stroke-width': 2 });
+    const c = [125, 185]; S('circle', { cx: c[0], cy: c[1], r: 42, fill: 'none', stroke: 'var(--muted)', 'stroke-width': 2 });
+    for (let k = 0; k < 4; k++) { const a = rad(ang + k * 90); S('line', { x1: c[0], y1: c[1], x2: c[0] + 38 * Math.cos(a), y2: c[1] + 38 * Math.sin(a), stroke: 'var(--bronze)', 'stroke-width': 4 }); }
+    T(125, 110, label, { 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 16 });
+    S('rect', { x: 220, y: 178, width: 120, height: 14, fill: 'var(--muted)' });
+    S('circle', { cx: 390, cy: 185, r: 60, fill: 'var(--work)', stroke: 'var(--ink)' });
+    S('polygon', { points: pts([[392, 248], [430, 330], [470, 330], [404, 246]]), fill: 'var(--tool)', stroke: 'var(--ink)' });
+    if (p > 0.01) arrow(svg, 400, 252, 400, 252 + 70 * p + 10, COL.c, 4);
+    T(330, 345, 'cutting force on tool', { 'font-size': 15, fill: 'var(--muted)' });
+  };
+  const D = [
+    p => { // current
+      motor(p, 'spindle motor'); const I = 2 + 8 * p;
+      S('path', { d: 'M125,120 C125,60 520,40 560,70', fill: 'none', stroke: 'var(--muted)', 'stroke-width': 2 });
+      const c = [580, 150]; S('circle', { cx: c[0], cy: c[1], r: 80, fill: 'var(--sheet)', stroke: 'var(--ink)', 'stroke-width': 2 });
+      S('path', { d: arcPath(c, 62, 210, 330), fill: 'none', stroke: 'var(--rule)', 'stroke-width': 8 });
+      const a = rad(210 + 120 * I / 12); arrow(svg, c[0], c[1], c[0] + 58 * Math.cos(a), c[1] + 58 * Math.sin(a), COL.c, 4);
+      T(c[0], c[1] + 40, I.toFixed(1) + ' A', { 'text-anchor': 'middle', 'font-weight': 700 }); T(c[0], c[1] - 18, 'A', { 'text-anchor': 'middle', fill: 'var(--muted)' });
+      T(480, 270, 'I = I₀ + k·F꜀', { 'font-size': 20, 'font-weight': 600 }); T(480, 296, 'I₀ = 2 A idle current', { 'font-size': 15, fill: 'var(--muted)' });
+      return `Meter reads ${I.toFixed(1)} A, of which 2.0 A is idle current.`;
+    },
+    p => { // voltage
+      motor(p, 'drive motor'); const r = rng(3);
+      S('path', { d: 'M125,120 C125,60 440,40 470,60', fill: 'none', stroke: 'var(--muted)', 'stroke-width': 2 });
+      S('rect', { x: 470, y: 50, width: 220, height: 160, rx: 8, fill: '#0f1a14', stroke: 'var(--ink)' });
+      let d = ''; for (let i = 0; i <= 200; i++) { const x = 480 + i, y = 160 - (20 + 80 * p) * (0.75 + 0.25 * Math.sin(i / 6 + ang / 20)) + (r() - 0.5) * 18; d += (i ? 'L' : 'M') + x + ',' + y.toFixed(1); }
+      S('path', { d, fill: 'none', stroke: '#4be37a', 'stroke-width': 1.6 });
+      T(580, 232, 'power / voltage signal', { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' });
+      T(470, 280, 'P = U·I ≈ F꜀·v꜀ / η', { 'font-size': 20, 'font-weight': 600 }); T(470, 306, 'jagged = electrical noise', { 'font-size': 15, fill: 'var(--muted)' });
+      const P = (0.4 + 2.6 * p); return `Electrical power about ${P.toFixed(1)} kW at 150 m/min (0.4 kW idle).`;
+    },
+    p => { // strain gauge
+      const F = 2000 * p, L = 40, eps = 6 * F * L / (210e3 * 25 * 625), V = 2 * eps / 4 * 10 * 1000;
+      S('rect', { x: 40, y: 80, width: 60, height: 240, fill: 'var(--muted)', opacity: .5 });
+      T(70, 70, 'clamp', { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' });
+      const x0 = 100, Ls = 400, dm = 70 * p, def2 = x => { const u = (x - x0) / Ls; return dm * u * u * (3 - u) / 2; };
+      const top = [], bot = []; for (let x = x0; x <= x0 + Ls; x += 10) { top.push([x, 175 + def2(x)]); bot.push([x, 215 + def2(x)]); }
+      S('polygon', { points: pts(top.concat(bot.reverse())), fill: 'var(--tool)', stroke: 'var(--ink)', 'stroke-width': 1.5 });
+      const tip = [x0 + Ls, 175 + dm]; if (p > 0.01) arrow(svg, tip[0] - 10, tip[1] - 60, tip[0] - 10, tip[1] - 2, COL.c, 4);
+      const st = 1 + 2.5 * p * 0.1 * 10 / 10; let g = 'M120,172'; for (let k = 0; k < 8; k++) { const xa = 120 + k * 12 * (1 + 0.25 * p); g += ` L${xa},162 L${xa + 6 * (1 + 0.25 * p)},162 L${xa + 6 * (1 + 0.25 * p)},172`; }
+      S('path', { d: g, fill: 'none', stroke: 'var(--bronze)', 'stroke-width': 2.5 });
+      T(120, 150, 'strain gauge (stretched)', { 'font-size': 15, fill: 'var(--bronze)' });
+      const c = [640, 175], r = 60; const q = [[c[0], c[1] - r], [c[0] + r, c[1]], [c[0], c[1] + r], [c[0] - r, c[1]]];
+      S('polygon', { points: pts(q), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 });
+      q.forEach((a, i) => { const b = q[(i + 1) % 4], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; S('rect', { x: m[0] - 9, y: m[1] - 9, width: 18, height: 18, fill: i === 0 ? 'var(--bronze)' : 'var(--sheet)', stroke: 'var(--ink)' }); });
+      T(c[0], 95, 'Wheatstone bridge', { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' });
+      T(c[0], 268, 'V = ' + V.toFixed(2) + ' mV', { 'text-anchor': 'middle', 'font-size': 20, 'font-weight': 700 });
+      T(40, 350, 'shank 25 × 25 mm · gauge 40 mm from tip · GF 2 · 10 V bridge', { 'font-size': 14, fill: 'var(--muted)' });
+      return `Surface strain ${(eps * 1e6).toFixed(0)} µm/m; bridge output ${V.toFixed(2)} mV. Bending exaggerated.`;
+    },
+    p => { // capacitive
+      const gap = 50 - 20 * p, C = 8.854e-12 * 1e-4 / (gap * 1e-6) * 1e12, yb = 280, gpx = 40 + 2.4 * gap, yt = yb - gpx;
+      S('rect', { x: 120, y: 40, width: 400, height: 16, fill: 'var(--muted)' });
+      let z = `M320,56`; const n = 8, hgt = yt - 14 - 56; for (let k = 1; k <= n; k++) z += ` L${k % 2 ? 300 : 340},${56 + hgt * k / n}`; z += ` L320,${yt - 14}`;
+      S('path', { d: z, fill: 'none', stroke: 'var(--muted)', 'stroke-width': 3 });
+      S('rect', { x: 150, y: yt - 14, width: 340, height: 14, fill: 'var(--blue)' }); S('rect', { x: 150, y: yb, width: 340, height: 14, fill: 'var(--blue)' });
+      const nl = Math.round(6 + 10 * p); for (let k = 0; k < nl; k++) { const x = 165 + k * 310 / (nl - 1); S('line', { x1: x, y1: yt + 2, x2: x, y2: yb - 2, stroke: 'var(--straw)', 'stroke-width': 2 }); }
+      if (p > 0.01) arrow(svg, 220, yt - 90, 220, yt - 18, COL.c, 4);
+      T(500, yb - gpx / 2 + 6, 'gap d = ' + gap.toFixed(0) + ' µm', { 'font-size': 16 });
+      T(560, 120, 'C = ε₀·A / d', { 'font-size': 22, 'font-weight': 600 });
+      T(560, 160, 'C = ' + C.toFixed(1) + ' pF', { 'font-size': 22, 'font-weight': 700, fill: 'var(--blue)' });
+      T(560, 196, 'plate area 100 mm²', { 'font-size': 15, fill: 'var(--muted)' });
+      T(150, 340, 'spring element  ·  moving plate  ·  fixed plate', { 'font-size': 14, fill: 'var(--muted)' });
+      return `Gap ${gap.toFixed(0)} µm → C = ${C.toFixed(1)} pF (no-load ${(8.854e-12 * 1e-4 / 50e-6 * 1e12).toFixed(1)} pF).`;
+    },
+    p => { // opto
+      const sh = 60 * p, I = Math.max(0.15, 1 - 0.85 * p);
+      S('rect', { x: 40, y: 160, width: 60, height: 60, rx: 8, fill: 'var(--straw)', stroke: 'var(--ink)' }); T(70, 245, 'LED', { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' });
+      S('rect', { x: 100, y: 170, width: 450, height: 40, fill: 'var(--straw)', opacity: 0.15 + 0.45 * I });
+      S('rect', { x: 320, y: 40, width: 18, height: 70 + sh, fill: 'var(--muted)' }); S('rect', { x: 300, y: 110 + sh, width: 58, height: 70, fill: 'var(--ink)', opacity: .85 });
+      T(360, 60, 'flexure + shutter', { 'font-size': 15, fill: 'var(--muted)' });
+      if (p > 0.01) arrow(svg, 380, 80, 380, 100 + sh, COL.c, 4);
+      S('rect', { x: 550, y: 160, width: 50, height: 60, fill: 'var(--blue)', stroke: 'var(--ink)' }); T(575, 245, 'photodiode', { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' });
+      S('rect', { x: 640, y: 80, width: 36, height: 220, fill: 'none', stroke: 'var(--ink)' }); S('rect', { x: 640, y: 80 + 220 * (1 - I), width: 36, height: 220 * I, fill: 'var(--blue)', opacity: .7 });
+      T(658, 325, (I * 100).toFixed(0) + '%', { 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 700 });
+      return `Photodiode receives ${(I * 100).toFixed(0)}% of the light. Shutter moved ${(0.05 * p * 1000).toFixed(0)} µm (drawn larger).`;
+    },
+    p => { // piezo
+      const F = 2000 * p, q = 2.3 * F, sq = 8 * p, y0 = 120 + sq / 2, h = 140 - sq;
+      S('rect', { x: 180, y: y0 - 10, width: 280, height: 10, fill: 'var(--bronze)' }); S('rect', { x: 180, y: y0 + h, width: 280, height: 10, fill: 'var(--bronze)' });
+      S('rect', { x: 180, y: y0, width: 280, height: h, fill: 'color-mix(in srgb, var(--violet) 18%, var(--sheet))', stroke: 'var(--violet)', 'stroke-width': 2 });
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) { const x = 215 + i * 42 + (j % 2 ? 10 * p : 0), y = y0 + 25 + j * (h - 50) / 2; S('circle', { cx: x, cy: y, r: 7, fill: j % 2 ? 'var(--blue)' : 'var(--bad)', opacity: .6 }); }
+      const n = Math.round(1 + 9 * p); for (let k = 0; k < n; k++) { const x = 195 + k * 250 / Math.max(1, 9); T(x, y0 - 18, '+', { fill: 'var(--bad)', 'font-weight': 700, 'font-size': 22 }); T(x, y0 + h + 34, '−', { fill: 'var(--blue)', 'font-weight': 700, 'font-size': 22 }); }
+      if (p > 0.01) { arrow(svg, 320, 30, 320, y0 - 34, COL.c, 4); arrow(svg, 320, 350, 320, y0 + h + 44, COL.c, 4); }
+      S('path', { d: `M460,${y0 - 5} L540,${y0 - 5} L540,180 L560,180`, fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 });
+      S('polygon', { points: pts([[560, 140], [560, 220], [630, 180]]), fill: 'var(--sheet)', stroke: 'var(--ink)', 'stroke-width': 2 }); T(575, 186, 'Q→V', { 'font-size': 13 });
+      T(560, 255, 'q = d·F', { 'font-size': 20, 'font-weight': 600 }); T(560, 284, fmt(q) + ' pC', { 'font-size': 20, 'font-weight': 700, fill: 'var(--violet)' });
+      T(150, 345, 'quartz plate between electrodes · charge amplifier', { 'font-size': 14, fill: 'var(--muted)' });
+      return `One quartz plate gives ${fmt(q)} pC at ${fmt(F)} N; dynamometers stack plates for more signal.`;
+    },
+  ];
+  const R = [ // step response: output vs time (step on at .15, off at .75)
+    t => { const on = t > .15 && t < .75; const s = t <= .15 ? 0 : t < .75 ? 1 - Math.exp(-(t - .15) / .06) : Math.exp(-(t - .75) / .06) * (1 - Math.exp(-.6 / .06)); return .25 + .6 * s; },
+    t => { const s = t <= .15 ? 0 : t < .75 ? 1 - Math.exp(-(t - .15) / .015) : Math.exp(-(t - .75) / .015); return .2 + .65 * s + 0.07 * Math.sin(t * 190) + 0.04 * Math.sin(t * 530); },
+    t => (t > .15 && t < .75 ? .8 : 0) + .1 * t,
+    t => (t > .15 && t < .75 ? .78 : 0) + .05,
+    t => Math.round(((t > .15 && t < .75 ? .8 : 0)) * 12) / 12,
+    t => t <= .15 ? 0 : t < .75 ? .85 * Math.exp(-(t - .15) / 1.2) : .85 * Math.exp(-.6 / 1.2) - .85 * Math.exp(-.6 / 1.2) + (.85 * Math.exp(-.6 / 1.2) - .85) * Math.exp(-(t - .75) / 1.2),
+  ];
+  const RT = [['lags behind the force,', 'never reads zero (idle offset)'], ['fast but noisy', ''], ['holds steady, but drifts', 'as the gauge warms up'], ['clean and steady;', 'small stray-capacitance offset'], ['steady; output moves in', 'resolution steps'], ['fastest, but charge leaks under', 'a held load; undershoots on release']];
+  function plot(i) {
+    const x0 = 760, y0 = 50, w = 320, h = 230;
+    S('rect', { x: x0, y: y0, width: w, height: h, fill: 'none', stroke: 'var(--muted)' });
+    T(x0, 34, 'response to a step in force', { 'font-size': 16, fill: 'var(--muted)' });
+    const Y = v => y0 + h - 20 - v * (h - 50), X = t => x0 + t * w;
+    S('polyline', { points: pts([[X(0), Y(0)], [X(.15), Y(0)], [X(.15), Y(.8)], [X(.75), Y(.8)], [X(.75), Y(0)], [X(1), Y(0)]]), fill: 'none', stroke: 'var(--muted)', 'stroke-dasharray': '6 5', 'stroke-width': 1.5 });
+    const L = []; for (let k = 0; k <= 300; k++) { const t = k / 300; L.push([X(t), Y(Math.max(-0.35, Math.min(1.1, R[i](t))))]); }
+    S('polyline', { points: pts(L), fill: 'none', stroke: COL.c, 'stroke-width': 2.5 });
+    S('line', { x1: x0, y1: Y(0), x2: x0 + w, y2: Y(0), stroke: 'var(--rule)' });
+    T(x0 + 8, y0 + h + 24, 'dashed: true force · red: sensor', { 'font-size': 14, fill: 'var(--muted)' });
+    T(x0 + 8, y0 + h + 46, RT[i][0], { 'font-size': 15, fill: 'var(--ink)' }); T(x0 + 8, y0 + h + 66, RT[i][1], { 'font-size': 15, fill: 'var(--ink)' });
+  }
+  let note = '';
+  function draw() { svg.innerHTML = ''; note = D[cur](+$('mmF').value / 2000); plot(cur); }
+  function render() { draw(); const m = M[cur]; def.innerHTML = `<span class="sym">${m.t} measurement</span><h3>${m.name}</h3><p style="font-size:18px">${m.how}</p><p style="font-size:17px;color:var(--bronze);margin-top:4px">${note}</p><p style="font-size:17px;margin-top:4px"><b style="color:var(--good)">+</b> ${m.p}<br><b style="color:var(--bad)">−</b> ${m.c}</p>`; }
+  const pick = tabs('mmList', M.map(m => m.name), i => { cur = i; render(); }, 5);
+  bindRange('mmF', x => fmt(x) + ' N', render)();
+  const loop = () => { if (svg.closest('.slide').classList.contains('active') && cur < 2) { ang = (ang + 6) % 360; draw(); } requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+  const SC = [['Research on chip formation at 10 kHz', 5, 'Piezoelectric: stiff, fast and accurate, which is why the Kistler 9441 and 9257B appear in the set-ups that follow.'], ['Cheap monitoring of a production line', 0, 'Motor current: no sensor in the cutting zone, enough to spot a broken tool or heavy wear.'], ['A home-made tool-holder for a student lab', 2, 'Strain gauges on the shank: simple and cheap, but recalibrate when the temperature changes.']];
+  tabs('mmScen', SC.map(s => s[0]), i => { $('mmAns').innerHTML = `<b>${SC[i][2]}</b>`; pick(SC[i][1]); });
+})();
+
+/* ===========================================================
+   5 — TURNING FORCE ANATOMY
+   =========================================================== */
+(function () {
+  const svg = $('tfSvg');
+  const D = {
+    c: ['Main cutting force F<sub>c</sub>', 'Tangential. The largest component in conventional turning. Sets spindle torque and cutting power P = F<sub>c</sub>·v<sub>c</sub>.'],
+    f: ['Feed force F<sub>f</sub>', 'Axial, along the feed. Loads the feed drive. Closely linked to friction of the chip on the rake face.'],
+    p: ['Passive force F<sub>p</sub>', 'Radial, normal to the machined surface. Does no work, but bends slender workpieces and the tool, causing size error and chatter.'],
+  };
+  let sel = 'c';
+  function up() {
+    const F = { c: +$('tfC').value, f: +$('tfF').value, p: +$('tfP').value };
+    svg.innerHTML = '';
+    el('rect', { x: 40, y: 80, width: 470, height: 200, fill: 'var(--work)' }, svg);
+    el('ellipse', { cx: 510, cy: 180, rx: 44, ry: 100, fill: 'var(--sheet)', stroke: 'var(--muted)', 'stroke-width': 1.5 }, svg);
+    el('ellipse', { cx: 40, cy: 180, rx: 44, ry: 100, fill: 'var(--work)', stroke: 'var(--muted)' }, svg);
+    el('line', { x1: 0, y1: 180, x2: 600, y2: 180, stroke: 'var(--muted)', 'stroke-dasharray': '10 6' }, svg);
+    const P = [500, 272];
+    el('polygon', { points: pts([P, [560, 300], [760, 420], [760, 438], [500, 330]]), fill: 'var(--tool)', stroke: 'var(--ink)', 'stroke-width': 1.5 }, svg);
+    arrow(svg, 330, 50, 230, 50, 'var(--muted)', 3); txt(svg, 280, 36, 'feed f', { 'text-anchor': 'middle', 'font-size': 17, fill: 'var(--muted)' });
+    const s = 150 / 2000;
+    const dirs = { c: [0, 1], f: [1, 0], p: [0.72, 0.42] };
+    ['c', 'f', 'p'].forEach(k => {
+      const L = Math.max(30, F[k] * s * (k === 'c' ? 1 : 1.6)), d = dirs[k];
+      const g = arrow(svg, P[0], P[1], P[0] + d[0] * L, P[1] + d[1] * L, COL[k], sel === k ? 9 : 5, 'farrow');
+      el('line', { x1: P[0], y1: P[1], x2: P[0] + d[0] * L, y2: P[1] + d[1] * L, class: 'hit' }, g);
+      g.setAttribute('tabindex', 0); g.setAttribute('role', 'button'); g.setAttribute('aria-label', 'F' + k);
+      g.addEventListener('click', () => { sel = k; up(); }); g.addEventListener('keydown', e => { if (e.key === 'Enter') { sel = k; up(); } });
+      txt(svg, P[0] + d[0] * L + (k === 'c' ? -16 : 12), P[1] + d[1] * L + (k === 'f' ? -14 : k === 'p' ? 26 : 10), 'F' + k + ' ' + fmt(F[k]) + ' N', { fill: COL[k], 'font-weight': 700, 'font-size': 19, 'text-anchor': k === 'c' ? 'end' : 'start' });
+    });
+    const R = Math.hypot(F.c, F.f, F.p);
+    txt(svg, 850, 36, 'resultant F = √(Fc² + Ff² + Fp²) = ' + fmt(R) + ' N', { 'font-size': 19, fill: COL.r, 'font-weight': 600, 'text-anchor': 'end' });
+    $('tfTxt').innerHTML = `<b style="color:${COL[sel]}">${D[sel][0]}.</b> ${D[sel][1]} <span style="color:var(--muted)">Start values: Table 3 trial 1 (slide 9). F<sub>c</sub> is ${(100 * F.c / R).toFixed(0)}% of the resultant.</span>`;
+  }
+  ['tfC', 'tfF', 'tfP'].forEach(id => bindRange(id, x => fmt(x) + ' N', up)());
+})();
+
+/* ===========================================================
+   6 — KIENZLE
+   =========================================================== */
+(function () {
+  const M = [['Steel C45', 1700, 0.25], ['Alloy steel 42CrMo4', 2100, 0.26], ['Stainless 304', 2350, 0.21], ['Grey cast iron', 1150, 0.26], ['Aluminium alloy', 700, 0.25], ['Ti-6Al-4V', 1400, 0.23]];
+  let m = 0; const svg = $('kzSvg');
+  function up() {
+    const ap = +$('kzAp').value, f = +$('kzF').value, k = +$('kzK').value, v = +$('kzV').value, sk = Math.sin(rad(k));
+    const h = f * sk, b = ap / sk, kc = M[m][1] * Math.pow(h, -M[m][2]), Fc = kc * b * h, P = Fc * v / 60000;
+    $('kzH').textContent = h.toFixed(3); $('kzB').textContent = b.toFixed(2); $('kzKc').textContent = fmt(kc); $('kzFc').textContent = fmt(Fc); $('kzP').textContent = P.toFixed(2);
+    svg.innerHTML = '';
+    const sc = Math.min(60, 150 / ap), fx = 8, x0 = 120, y0 = 30, dx = ap / Math.tan(rad(k));
+    const poly = [[x0, y0], [x0 + f * sc * fx, y0], [x0 + f * sc * fx + dx * sc, y0 + ap * sc], [x0 + dx * sc, y0 + ap * sc]];
+    el('polygon', { points: pts(poly), fill: 'var(--straw)', opacity: .55, stroke: 'var(--bronze)', 'stroke-width': 2 }, svg);
+    txt(svg, x0 - 10, y0 + ap * sc / 2 + 6, 'aₚ ' + ap.toFixed(1), { 'text-anchor': 'end', 'font-size': 17, fill: 'var(--muted)' });
+    txt(svg, x0 + f * sc * fx / 2, y0 - 8, 'f ' + f.toFixed(2) + ' (×8)', { 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--muted)' });
+    txt(svg, 940, 60, `A = aₚ·f = ${(ap * f).toFixed(3)} mm²`, { 'text-anchor': 'end', 'font-size': 20, fill: 'var(--ink)' });
+    txt(svg, 940, 92, `chip slenderness b/h = ${(b / h).toFixed(0)}`, { 'text-anchor': 'end', 'font-size': 18, fill: 'var(--muted)' });
+    txt(svg, 940, 124, `MRR Q = aₚ·f·v꜀ = ${fmt(ap * f * v, 1)} cm³/min`, { 'text-anchor': 'end', 'font-size': 18, fill: 'var(--muted)' });
+    $('kzNote').innerHTML = `${M[m][0]}: k<sub>c1.1</sub> = ${M[m][1]} N/mm², m<sub>c</sub> = ${M[m][2]}. Typical values for illustration only. Table 3 trial 1 gives 1671 N / 0.749 mm² = 2,232 N/mm².`;
+  }
+  tabs('kzMat', M.map(x => x[0]), i => { m = i; if ($('kzAp').value) up(); });
+  bindRange('kzAp', x => x.toFixed(1) + ' mm', up); bindRange('kzF', x => x.toFixed(2) + ' mm/rev', up); bindRange('kzK', x => x + '°', up); bindRange('kzV', x => x + ' m/min', up);
+  ['kzAp', 'kzF', 'kzK', 'kzV'].forEach(id => $(id).dispatchEvent(new Event('input')));
+})();
+
+/* ===========================================================
+   7 — MEASUREMENT CHAIN
+   =========================================================== */
+(function () {
+  const svg = $('chSvg'), def = $('chDef');
+  const B = [
+    ['Tool &amp; adapter', 'rigid fixture', 'The tool holder is clamped to the dynamometer through a custom adapter. The fixture must be very rigid: any compliance adds vibration and lowers the natural frequency of the set-up.'],
+    ['Dynamometer', 'Kistler 9441', 'Three-component piezoelectric dynamometer. Quartz plates cut for each axis produce an electric charge proportional to F<sub>c</sub>, F<sub>f</sub> and F<sub>p</sub>.'],
+    ['Charge amplifier', 'Kistler 5007A', 'Converts the tiny charge (picocoulombs) into a voltage. You set the sensor sensitivity and a range so the output fills ±10 V without clipping (slide 8).'],
+    ['A/D sampling', 'data acquisition', 'Samples the voltage many times per second. The sampling rate must be well above the tooth-passing or vibration frequency you want to see.'],
+    ['Computer', 'processing', 'Converts volts back to newtons, filters noise, and extracts the mean or peak force for each test. Calibrate the whole chain before measuring.'],
+  ];
+  const g = []; const W = 172, gap = 35;
+  B.forEach((b, i) => {
+    const x = 10 + i * (W + gap), grp = el('g', { class: 'chainblk', tabindex: 0, role: 'button' }, svg);
+    el('rect', { x, y: 90, width: W, height: 120, rx: 12 }, grp);
+    txt(grp, x + W / 2, 140, b[0].replace('&amp;', '&'), { 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 700 });
+    txt(grp, x + W / 2, 172, b[1], { 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--muted)' });
+    txt(svg, x + W / 2, 70, String(i + 1).padStart(2, '0'), { 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--bronze)' });
+    if (i < B.length - 1) arrow(svg, x + W + 4, 150, x + W + gap - 4, 150, 'var(--bronze)', 3);
+    grp.addEventListener('click', () => pick(i)); grp.addEventListener('keydown', e => { if (e.key === 'Enter') pick(i); });
+    g.push(grp);
+  });
+  txt(svg, 500, 260, 'force  →  charge (pC)  →  voltage (V)  →  numbers  →  newtons', { 'text-anchor': 'middle', 'font-size': 18, fill: 'var(--muted)' });
+  function pick(i) { g.forEach((x, j) => x.classList.toggle('on', i === j)); def.innerHTML = `<span class="sym">${B[i][1]}</span><h3>${B[i][0]}</h3><p style="font-size:20px">${B[i][2]}</p>`; }
+  pick(1);
+})();
+
+/* ===========================================================
+   8 — CHARGE AMPLIFIER RANGE
+   =========================================================== */
+(function () {
+  const R = [1000, 2000, 5000, 10000, 20000]; let r = 3; const svg = $('pzSvg');
+  const rr = rng(11), base = Array.from({ length: 300 }, (_, i) => { const t = i / 299; const env = t < 0.1 ? 0 : t < 0.15 ? (t - 0.1) / 0.05 : t < 0.85 ? 1 : t < 0.9 ? (0.9 - t) / 0.05 : 0; return env * (0.82 + 0.1 * Math.sin(i / 3) + 0.08 * (rr() - 0.5) * 2); });
+  function up() {
+    const F = +$('pzF').value, S = +$('pzS').value, q = S * F, V = q / R[r] * 10, sc = R[r] / (10 * S);
+    $('pzQ').textContent = fmt(q); $('pzV').textContent = Math.min(V, 10).toFixed(2) + (V > 10 ? '!' : ''); $('pzSc').textContent = sc.toFixed(1);
+    svg.innerHTML = '';
+    const ax = axes(svg, { x0: 70, y0: 14, w: 770, h: 236, xmin: 0, xmax: 1, ymin: -2, ymax: 12, yticks: [0, 5, 10], ylab: 'output, V' });
+    el('rect', { x: 70, y: ax.fy(12), width: 770, height: ax.fy(10) - ax.fy(12), fill: 'var(--bad)', opacity: .1 }, svg);
+    txt(svg, 830, ax.fy(10.6), 'clipping above 10 V', { 'text-anchor': 'end', 'font-size': 15, fill: 'var(--bad)' });
+    const p = base.map((b, i) => [ax.fx(i / 299), ax.fy(Math.min(10, b * V))]);
+    el('polyline', { points: pts(p), fill: 'none', stroke: V > 10 ? 'var(--bad)' : 'var(--blue)', 'stroke-width': 2 }, svg);
+    txt(svg, 455, 290, 'time →  tool enters, cuts, leaves', { 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--muted)' });
+    $('pzTxt').innerHTML = V > 10 ? `<b style="color:var(--bad)">Clipped.</b> The peaks are lost. Choose a larger range.` : V < 2.5 ? `<b style="color:var(--bronze)">Only ${(V * 10).toFixed(0)}% of the output used.</b> Noise and the A/D step size become a large share of the reading. Choose a smaller range.` : `<b style="color:var(--good)">Good choice.</b> The signal uses ${(V * 10).toFixed(0)}% of the output and every volt equals ${sc.toFixed(1)} N.`;
+  }
+  tabs('pzR', R.map(x => fmt(x) + ' pC'), i => { r = i; if ($('pzF').value) up(); }, 3);
+  bindRange('pzF', x => fmt(x) + ' N', up); bindRange('pzS', x => '−' + x.toFixed(1) + ' pC/N', up);
+  ['pzF', 'pzS'].forEach(id => $(id).dispatchEvent(new Event('input')));
+})();
+
+/* ===========================================================
+   9 — TABLE 3 EXPLORER
+   =========================================================== */
+(function () {
+  const T = [[1.5,143,.499,95,1671,702,475],[.75,143,.499,95,840,294,338],[1.5,143,.124,95,535,356,182],[.75,143,.124,95,300,178,158],[1.5,94,.499,95,1663,765,523],[.75,94,.499,95,837,317,413],[1.5,94,.124,95,575,394,185],[.75,94,.124,95,330,205,153],[1,116,.249,95,674,374,266],[1,116,.249,95,672,367,273],[1,116,.249,95,676,371,282],[1,116,.249,95,682,377,282],[1.5,143,.499,85,1472,631,414],[.75,143,.499,85,843,353,350],[1.5,143,.124,85,502,352,143],[.75,143,.124,85,301,201,137],[1.5,94,.499,85,1532,756,420],[.75,94,.499,85,904,417,400],[1.5,94,.124,85,542,384,141],[.75,94,.124,85,317,217,140],[1,116,.249,85,628,387,233],[1,116,.249,85,644,381,233],[1,116,.249,85,639,401,226],[1,116,.249,85,630,371,230],[1.5,143,.499,75,1460,690,328],[.75,143,.499,75,801,390,311],[1.5,143,.124,75,492,359,118],[.75,143,.124,75,282,206,106],[1.5,94,.499,75,1567,886,401],[.75,94,.499,75,847,459,346],[1.5,94,.124,75,511,367,109],[.75,94,.124,75,286,217,110],[1,116,.249,75,615,429,186],[1,116,.249,75,618,401,198],[1,116,.249,75,619,421,192],[1,116,.249,75,631,422,199]];
+  const XS = [['f (mm/rev)', 2, [0.1, 0.55]], ['aₚ (mm)', 0, [0.6, 1.65]], ['v (m/min)', 1, [85, 150]], ['κ (°)', 3, [72, 98]]];
+  const YS = [['F<sub>c</sub>', 4], ['F<sub>f</sub>', 5], ['F<sub>p</sub>', 6]];
+  let xi = 0, yi = 0; const svg = $('t3Svg');
+  function solve(A, b) { const n = b.length, M = A.map((r, i) => [...r, b[i]]); for (let i = 0; i < n; i++) { let p = i; for (let k = i + 1; k < n; k++) if (Math.abs(M[k][i]) > Math.abs(M[p][i])) p = k;[M[i], M[p]] = [M[p], M[i]]; for (let k = i + 1; k < n; k++) { const f = M[k][i] / M[i][i]; for (let j = i; j <= n; j++) M[k][j] -= f * M[i][j]; } } const x = Array(n).fill(0); for (let i = n - 1; i >= 0; i--) { let s = M[i][n]; for (let j = i + 1; j < n; j++) s -= M[i][j] * x[j]; x[i] = s / M[i][i]; } return x; }
+  function fit(col) { const X = T.map(r => [1, Math.log(r[0]), Math.log(r[2]), Math.log(r[1]), Math.log(r[3])]), y = T.map(r => Math.log(r[col])); const A = [0, 1, 2, 3, 4].map(i => [0, 1, 2, 3, 4].map(j => X.reduce((s, r) => s + r[i] * r[j], 0))), b = [0, 1, 2, 3, 4].map(i => X.reduce((s, r, k) => s + r[i] * y[k], 0)); const c = solve(A, b); const m = y.reduce((s, v) => s + v, 0) / y.length; const ss = y.reduce((s, v, k) => s + (v - X[k].reduce((a, xv, j) => a + xv * c[j], 0)) ** 2, 0), st = y.reduce((s, v) => s + (v - m) ** 2, 0); return { c, R2: 1 - ss / st }; }
+  function up() {
+    const [xl, xc, xr] = XS[xi], yc = YS[yi][1];
+    svg.innerHTML = '';
+    const ymax = yc === 4 ? 1800 : yc === 5 ? 1000 : 600;
+    const ax = axes(svg, { x0: 90, y0: 14, w: 840, h: 300, xmin: xr[0], xmax: xr[1], ymin: 0, ymax, xticks: xc === 2 ? [0.124, 0.249, 0.499] : xc === 0 ? [0.75, 1, 1.5] : xc === 1 ? [94, 116, 143] : [75, 85, 95], yticks: [0, ymax / 4, ymax / 2, 3 * ymax / 4, ymax], xlab: xl, ylab: YS[yi][0].replace(/<\/?sub>/g, '') + ' (N)' });
+    const kc = { 95: 'var(--bad)', 85: 'var(--bronze)', 75: 'var(--blue)' };
+    T.forEach((r, i) => { const j = ((i * 37) % 11 - 5) / 5 * (xr[1] - xr[0]) * 0.012; const c = el('circle', { cx: ax.fx(r[xc] + j), cy: ax.fy(r[yc]), r: 8, fill: kc[r[3]], opacity: .8, stroke: 'var(--sheet)', 'stroke-width': 1.5 }, svg); const t = el('title', {}, c); t.textContent = `Trial ${i + 1}: ap ${r[0]}, v ${r[1]}, f ${r[2]}, κ ${r[3]} → Fc ${r[4]}, Ff ${r[5]}, Fp ${r[6]} N`; });
+    [[95, 'κ 95°'], [85, 'κ 85°'], [75, 'κ 75°']].forEach(([k, l], i) => { el('circle', { cx: 110 + i * 110, cy: 34, r: 7, fill: kc[k] }, svg); txt(svg, 122 + i * 110, 40, l, { 'font-size': 16, fill: 'var(--muted)' }); });
+    const F = fit(yc), c = F.c, nm = YS[yi][0];
+    $('t3Fit').innerHTML = [['aₚ exponent', c[1]], ['f exponent', c[2]], ['v exponent', c[3]], ['κ exponent', c[4]], ['R²', F.R2]].map(([k, v], i) => `<div style="${i === 4 ? 'border-right:none' : ''}"><span class="k">${k}</span><span class="v" style="font-size:30px">${v.toFixed(i === 4 ? 3 : 2)}</span></div>`).join('');
+    $('t3Txt').innerHTML = `Least-squares fit of all 36 trials: ${nm} = ${fmt(Math.exp(c[0]), 1)} · a<sub>p</sub><sup>${c[1].toFixed(2)}</sup> · f<sup>${c[2].toFixed(2)}</sup> · v<sup>${c[3].toFixed(2)}</sup> · κ<sup>${c[4].toFixed(2)}</sup>. ` + (yc === 4 ? `Depth and feed dominate; the speed exponent is small and negative, so faster cutting lowers F<sub>c</sub> slightly. Doubling feed gives ×${Math.pow(2, c[2]).toFixed(2)}.` : yc === 5 ? 'The feed force depends less on feed than F<sub>c</sub> does, and falls with speed more strongly.' : 'Here the entering angle matters most: in these trials F<sub>p</sub> rises with κ. Hover a point for its trial.');
+  }
+  tabs('t3X', XS.map(x => x[0]), i => { xi = i; up(); });
+  tabs('t3Y', YS.map(x => x[0]), i => { yi = i; up(); });
+})();
+
+/* ===========================================================
+   10 — MILLING FORCES
+   =========================================================== */
+(function () {
+  figTabs('mlTabs', 'mlFig', [['Fig. 1 · DIN 6584', 'din6584.jpg', 'Fig. 1 Force distribution diagram during end milling according to DIN 6584'], ['Fig. 6 · forces on tool', 'endmill.jpg', 'Fig. 6 Force interacting on work material and tool in end milling']]);
+  const cut = $('mlCut'), plot = $('mlPlot');
+  const kc11 = 1700, mc = 0.25, kn = 0.4;
+  const force = (phi, fz, ap) => { const h = fz * Math.sin(rad(phi)); const Fc = h > 1e-4 ? kc11 * ap * Math.pow(h, 1 - mc) : 0, FN = kn * Fc; const s = Math.sin(rad(phi)), c = Math.cos(rad(phi)); return { h, Fc, Fx: -Fc * c - FN * s, Fy: -Fc * s + FN * c }; };
+  function up() {
+    const phi = +$('mlPhi').value, fz = +$('mlFz').value, ap = +$('mlAp').value, F = force(phi, fz, ap);
+    $('mlH').textContent = F.h.toFixed(3); $('mlFc').textContent = fmt(F.Fc); $('mlFx').textContent = fmt(F.Fx); $('mlFy').textContent = fmt(F.Fy);
+    cut.innerHTML = '';
+    const C = [170, 110], R = 85;
+    el('rect', { x: 10, y: 110, width: 320, height: 180, fill: 'var(--work)', opacity: .6 }, cut);
+    el('circle', { cx: C[0], cy: C[1], r: R, fill: 'var(--sheet)', stroke: 'var(--ink)', 'stroke-width': 2 }, cut);
+    el('path', { d: arcPath(C, R + 14, 180, 0).replace(/A(\S+) 0 0 1/, 'A$1 0 0 0'), fill: 'none', stroke: 'var(--muted)', 'stroke-dasharray': '4 5' }, cut);
+    const p = [C[0] - R * Math.cos(rad(phi)), C[1] + R * Math.sin(rad(phi))];
+    el('line', { x1: C[0], y1: C[1], x2: p[0], y2: p[1], stroke: 'var(--muted)', 'stroke-width': 1.5 }, cut);
+    el('circle', { cx: p[0], cy: p[1], r: 8, fill: 'var(--tool)', stroke: 'var(--ink)' }, cut);
+    const s = 70 / 1200, sx = Math.sin(rad(phi)), cx = Math.cos(rad(phi));
+    if (F.Fc > 0) { arrow(cut, p[0], p[1], p[0] - F.Fc * s * sx, p[1] - F.Fc * s * cx, COL.c, 4); arrow(cut, p[0], p[1], p[0] + F.Fy * s, p[1] + F.Fx * s, COL.r, 4); }
+    arrow(cut, 300, 20, 300, 70, 'var(--muted)', 3); txt(cut, 292, 92, 'feed', { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' });
+    txt(cut, 20, 24, 'φ = ' + phi + '°', { 'font-size': 18, fill: 'var(--ink)', 'font-weight': 600 });
+    txt(cut, 20, 286, 'red: Fc   bronze: resultant', { 'font-size': 14, fill: 'var(--muted)' });
+    plot.innerHTML = '';
+    const ax = axes(plot, { x0: 70, y0: 14, w: 430, h: 226, xmin: 0, xmax: 180, ymin: -2500, ymax: 2500, xticks: [0, 45, 90, 135, 180], yticks: [-2000, 0, 2000], xlab: 'φ (°)', ylab: 'force (N)' });
+    [['Fc', COL.c], ['Fx', COL.f], ['Fy', COL.p]].forEach(([k, col], i) => { const L = []; for (let a = 0; a <= 180; a += 2) L.push([ax.fx(a), ax.fy(Math.max(-2500, Math.min(2500, force(a, fz, ap)[k])))]); el('polyline', { points: pts(L), fill: 'none', stroke: col, 'stroke-width': 2.5 }, plot); txt(plot, 90 + i * 70, 34, k, { fill: col, 'font-size': 16, 'font-weight': 700 }); });
+    el('line', { x1: ax.fx(phi), y1: 14, x2: ax.fx(phi), y2: 240, stroke: 'var(--ink)', 'stroke-dasharray': '4 4' }, plot);
+  }
+  bindRange('mlPhi', x => x + '°', up); bindRange('mlFz', x => x.toFixed(2) + ' mm', up); bindRange('mlAp', x => x.toFixed(1) + ' mm', up);
+  ['mlFz', 'mlAp', 'mlPhi'].forEach(id => $(id).dispatchEvent(new Event('input')));
+})();
+
+/* ===========================================================
+   11 — FORCE SIGNALS
+   =========================================================== */
+(function () {
+  const caps = ['Fig. 4 Comparison of cutting force transitions during one cutting between dry and wet (E-VG8) conditions in micro feed end milling. Feed 1 µm/rev, 100 m/min, SUS440C.', 'Figure 4: Analysis of the effect of the conventional and MQL cooling on the tangential cutting forces (grinding cycles).'];
+  figTabs('sgTabs', 'sgFig', [['Micro milling · dry vs wet', 'traces.jpg', 'Cutting force against time, dry and wet, in micro end milling'], ['Grinding · conventional vs MQL', 'mql.jpg', 'Tangential grinding force against cycles for conventional and MQL cooling']], i => { $('sgCap').textContent = caps[i]; });
+  const svg = $('sgSvg'), N = 500, r = rng(21), z = Array.from({ length: N }, () => (r() - 0.5) * 2);
+  function up() {
+    const n = +$('sgN').value, w = +$('sgW').value, L = +$('sgL').value;
+    const y = z.map((e, i) => { const t = i / N; return 300 * (1 + 0.5 * w * t) + 300 * n * (0.18 * Math.sin(i / 2.2) + 0.25 * e); });
+    const f = y.map((_, i) => { const a = Math.max(0, i - L + 1); let s = 0; for (let k = a; k <= i; k++) s += y[k]; return s / (i - a + 1); });
+    const mean = y.reduce((s, v) => s + v, 0) / N, pk = Math.max(...y), rms = Math.sqrt(y.reduce((s, v, i) => s + (v - f[i]) ** 2, 0) / N);
+    $('sgMean').textContent = fmt(mean); $('sgPk').textContent = fmt(pk); $('sgRms').textContent = fmt(rms); $('sgPm').textContent = (pk / mean).toFixed(2);
+    svg.innerHTML = '';
+    const ax = axes(svg, { x0: 70, y0: 14, w: 770, h: 250, xmin: 0, xmax: N, ymin: 0, ymax: 800, yticks: [0, 200, 400, 600, 800], ylab: 'force (N)' });
+    el('polyline', { points: pts(y.map((v, i) => [ax.fx(i), ax.fy(Math.min(800, Math.max(0, v)))])), fill: 'none', stroke: 'var(--muted)', 'stroke-width': 1.2, opacity: .8 }, svg);
+    el('polyline', { points: pts(f.map((v, i) => [ax.fx(i), ax.fy(v)])), fill: 'none', stroke: 'var(--blue)', 'stroke-width': 3 }, svg);
+    el('line', { x1: 70, y1: ax.fy(mean), x2: 840, y2: ax.fy(mean), stroke: 'var(--bronze)', 'stroke-dasharray': '8 6', 'stroke-width': 2 }, svg);
+    el('line', { x1: 70, y1: ax.fy(Math.min(800, pk)), x2: 840, y2: ax.fy(Math.min(800, pk)), stroke: 'var(--bad)', 'stroke-dasharray': '3 5', 'stroke-width': 2 }, svg);
+    txt(svg, 836, ax.fy(mean) - 8, 'mean', { 'text-anchor': 'end', 'font-size': 15, fill: 'var(--bronze)' }); txt(svg, 836, ax.fy(Math.min(800, pk)) - 8, 'peak', { 'text-anchor': 'end', 'font-size': 15, fill: 'var(--bad)' });
+    txt(svg, 455, 305, 'time → (blue: filtered)', { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' });
+  }
+  bindRange('sgN', x => (x * 100).toFixed(0) + '%', up); bindRange('sgW', x => '+' + (x * 50).toFixed(0) + '%', up); bindRange('sgL', x => x + ' samples', up);
+  ['sgN', 'sgW', 'sgL'].forEach(id => $(id).dispatchEvent(new Event('input')));
+})();
+
+/* ===========================================================
+   12 — SPEED
+   =========================================================== */
+(function () {
+  const fig = $('spFig');
+  let hl = -1;
+  const regs = [[220, 30, 740, 540, 'v<sub>c</sub> 100 → 200 m/min: force falls from about 245 N to 170 N. The hotter shear zone softens GCr15.'], [960, 30, 370, 540, 'v<sub>c</sub> 200 → 300 m/min: force rises again to about 198 N. Near the melting point the extra heat no longer softens the material much.'], [180, 560, 1170, 90, 'Look at the x-axis: 100, 150, 200 and 300 are equally spaced. The last step is 100 m/min, twice the others, so the rise looks steeper than it is.']];
+  function show(i) {
+    if (i === 0) { fig.innerHTML = `<div class="hs"><img src="img/ch7/speed.jpg" alt="Fig. 4 Cutting speed versus cutting force (f = 0.05 mm/r, ap = 0.1 mm)"><svg id="spHs" viewBox="0 0 1386 800" preserveAspectRatio="none"></svg></div>`; const s = $('spHs'); regs.forEach((g, k) => el('rect', { x: g[0], y: g[1], width: g[2], height: g[3], rx: 8, class: 'hz' + (k === hl ? ' on' : '') }, s)); }
+    else fig.innerHTML = `<img src="img/ch7/cryomill.jpg" alt="Fig. 3 Effect of cutting speed on cutting force for dry and cryogenic machining at three feeds per tooth">`;
+    $('spReg').style.display = i === 0 ? '' : 'none';
+    $('spRegTxt').innerHTML = i === 0 ? (hl >= 0 ? regs[hl][4] : 'Pick a region to highlight it on the figure.') : 'Fig. 3 (milling, three feeds per tooth): force falls with speed under dry and LN<sub>2</sub> conditions, and each LN<sub>2</sub> curve sits below its dry curve.';
+  }
+  let cur = 0;
+  tabs('spTabs', ['Fig. 4 · PCBN hard turning', 'Fig. 3 · dry vs cryogenic milling'], i => { cur = i; show(i); });
+  tabs('spReg', ['100–200 m/min', '200–300 m/min', 'Check the x-axis'], i => { hl = i; show(cur); }, 0);
+})();
+
+/* ===========================================================
+   13 — FEED
+   =========================================================== */
+(function () {
+  const svg = $('fdSvg');
+  const A = [[0.05, 250], [0.10, 355], [0.15, 490]], B = [[0.05, 210], [0.10, 320], [0.15, 400]];
+  const bfit = d => Math.log(d[2][1] / d[0][1]) / Math.log(d[2][0] / d[0][0]);
+  const ba = bfit(A), bb = bfit(B);
+  function up() {
+    const b = +$('fdB').value;
+    $('fdR').textContent = '×' + Math.pow(2, b).toFixed(2); $('fdK').textContent = '×' + Math.pow(2, b - 1).toFixed(2);
+    svg.innerHTML = '';
+    const ax = axes(svg, { x0: 70, y0: 14, w: 470, h: 230, xmin: 0.04, xmax: 0.16, ymin: 150, ymax: 550, xticks: [0.05, 0.1, 0.15], yticks: [200, 300, 400, 500], xlab: 'f (mm/r)', ylab: 'F (N)' });
+    [[A, 'var(--bad)', '(a) 100 m/min', ba], [B, 'var(--blue)', '(b) 150 m/min', bb]].forEach(([d, c, l, bf], k) => {
+      const L = []; for (let f = 0.045; f <= 0.155; f += 0.005) L.push([ax.fx(f), ax.fy(d[0][1] * Math.pow(f / 0.05, bf))]);
+      el('polyline', { points: pts(L), fill: 'none', stroke: c, 'stroke-width': 2, 'stroke-dasharray': '6 4' }, svg);
+      d.forEach(p => el('circle', { cx: ax.fx(p[0]), cy: ax.fy(p[1]), r: 7, fill: c }, svg));
+      txt(svg, 84, 40 + k * 24, `${l}: b = ${bf.toFixed(2)}`, { fill: c, 'font-size': 16 });
+    });
+    $('fdTxt').innerHTML = `Points read from Fig. 5 give b ≈ ${ba.toFixed(2)} and ${bb.toFixed(2)}, so doubling feed gives ×${Math.pow(2, ba).toFixed(2)} and ×${Math.pow(2, bb).toFixed(2)}: "about 1.5 times". Because b &lt; 1, the force per mm² (k<sub>c</sub>) drops as the chip thickens. In Table 3 (slide 9) b ≈ 0.76.`;
+  }
+  bindRange('fdB', x => x.toFixed(2), up)(); $('fdB').dispatchEvent(new Event('input'));
+})();
+
+/* ===========================================================
+   14 — COATED VS UNCOATED
+   =========================================================== */
+(function () {
+  const T = [
+    `<p>At Vc = 51 m/min, cutting force for uncoated tool appears slightly higher than coated tool; however, with cutting speed increment, similar trend prevails; but, difference in cutting force magnitude between uncoated, and coated insert gradually increases.</p><p>Till Vc = 93 m/min, advancement of cutting zone temperature at tool-workpiece interface is not enough to cause adequate thermal softening of the work alloy; hence, higher cutting force is required for metal cutting.</p><div class="ev"><span class="what">Evidence · AISI 4140, dry turning</span><p style="font-size:17px">The CVD-coated insert gave the lowest cutting force; the uncoated insert's tangential force was 1.77 times higher.</p><span class="cite">Hamadi et al. (2022)</span></div>`,
+    `<p>At Vc = 121 m/min, sudden drop in cutting force value is observed both for uncoated, and coated tool when compared to low, and medium cutting speeds. Owing to tremendous rise in cutting zone temperature, effect of thermal-induced softening becomes dominant which enhances ease of machining with application of lower cutting force.</p><p>At elevated cutting temperature, material flow strength is reduced, thereby, cutting force is decreased. However, at high cutting speed (Vc = 121 m/min), reduction in cutting force magnitude appears more drastic for coated tool than uncoated counterpart. In all cases, coated insert experiences lesser cutting force than uncoated tool due to its anti-friction property, and higher hardness value.</p><p>According to Thakur and Gangopadhyay [13], coefficient of friction between uncoated insert, and work alloy is 0.7; on the contrary, lower frictional coefficient (0.47) is attributed to the interface of CVD multi-layer (TiCN-Al2O3) coated tool, and workpiece.</p><p>Thus, lower friction coefficient for coated tool is responsible for machining with lower cutting force.</p><div class="ev"><span class="what">Evidence · chip sticking</span><p style="font-size:17px">Force spikes were highest for the uncoated tool, linked to chip sticking and built-up edge.</p><span class="cite">Seid Ahmed et al. (2017)</span></div>`,
+  ];
+  tabs('ctTabs', ['51–93 m/min', '121 m/min &amp; friction'], i => { $('ctTxt').innerHTML = T[i]; });
+  const svg = $('ctSvg');
+  const fac = (mu, a) => { const b = Math.atan(mu), al = rad(a), ph = Math.PI / 4 + al / 2 - b / 2; return { f: Math.cos(b - al) / (Math.sin(ph) * Math.cos(ph + b - al)), ph: ph * 180 / Math.PI }; };
+  function up() {
+    const mu1 = +$('ctU').value, mu2 = +$('ctC').value, a = +$('ctA').value, U = fac(mu1, a), C = fac(mu2, a);
+    svg.innerHTML = '';
+    const mx = Math.max(U.f, C.f) * 1.15, H = 160, y0 = 190;
+    [[U, 'uncoated', 'var(--muted)', mu1], [C, 'coated', 'var(--bronze)', mu2]].forEach(([v, l, c, mu], i) => { const x = 90 + i * 230, h = v.f / mx * H; el('rect', { x, y: y0 - h, width: 150, height: h, fill: c, rx: 4 }, svg); txt(svg, x + 75, y0 - h - 10, v.f.toFixed(2) + ' τA', { 'text-anchor': 'middle', 'font-size': 18 }); txt(svg, x + 75, y0 + 24, `${l} · μ ${mu.toFixed(2)} · φ ${v.ph.toFixed(0)}°`, { 'text-anchor': 'middle', 'font-size': 15, fill: 'var(--muted)' }); });
+    el('line', { x1: 60, y1: y0, x2: 540, y2: y0, stroke: 'var(--ink)' }, svg);
+    const d = (1 - C.f / U.f) * 100;
+    $('ctOut').innerHTML = d >= 0 ? `Predicted cutting force with the coated tool is <b>${d.toFixed(0)}% lower</b>: less friction lets the shear angle φ grow, so the shear plane and the chip get shorter.` : `With these values the "coated" tool has more friction, so its force is ${(-d).toFixed(0)}% higher.`;
+  }
+  bindRange('ctU', x => x.toFixed(2), up); bindRange('ctC', x => x.toFixed(2), up); bindRange('ctA', x => x + '°', up);
+  ['ctU', 'ctC', 'ctA'].forEach(id => $(id).dispatchEvent(new Event('input')));
+})();
+
+/* ===========================================================
+   15 — LN2 NOZZLE HOTSPOTS
+   =========================================================== */
+hotspots('nzHs', 'nzList', 'nzDef', [
+  { name: 'LN<sub>2</sub> inlet', boxes: [[920, 14, 220, 66], [660, 140, 140, 80]], d: 'Liquid nitrogen at about −196 °C enters the supply head here.' },
+  { name: 'LN<sub>2</sub> pool', box: [262, 36, 200, 62], d: 'A small reservoir inside the head that feeds both nozzles.' },
+  { name: 'Secondary nozzle', box: [920, 104, 390, 96], d: 'In the supply head. Sprays LN<sub>2</sub> onto the flank face through the flank channel, cooling the tool–workpiece contact.' },
+  { name: 'Primary nozzle', box: [956, 286, 340, 96], d: 'In the chipbreaker, right behind the cutting edge. Releases LN<sub>2</sub> to the chip–tool interface on the rake face, where it can form a gas and liquid cushion that lubricates.' },
+  { name: 'Flank channel', box: [66, 166, 290, 58], d: 'Carries LN<sub>2</sub> from the secondary nozzle down to the flank face.' },
+  { name: 'Tool insert', box: [1030, 556, 240, 56], d: 'The cutting insert itself, clamped under the chipbreaker.' },
+  { name: 'Rake &amp; cutting edge', boxes: [[796, 946, 124, 58], [146, 986, 400, 56]], d: 'The chip slides over the rake face; cooling here lowers friction and so the feed force.' },
+  { name: 'Flank', box: [256, 906, 116, 58], d: 'The face that rubs the new surface. Flank cooling removes heat but lubricates less.' },
+], x => `<span class="sym">two-nozzle LN<sub>2</sub> delivery</span><h3>${x.name}</h3><p style="font-size:20px">${x.d}</p>`, 3);
+
+/* ===========================================================
+   16 — CRYO RESULTS
+   =========================================================== */
+(function () {
+  const D = { Dry: [1268, 560, 476], Flank: [1290, 547, 494], Rake: [1308, 507, 520], Both: [1361, 516, 543] };
+  const N = ['main cutting force F<sub>c</sub>', 'feed force F<sub>f</sub>', 'thrust force F<sub>t</sub>'], svg = $('cbSvg');
+  tabs('cbF', ['F<sub>c</sub>', 'F<sub>f</sub>', 'F<sub>t</sub>'], k => {
+    svg.innerHTML = '';
+    const ax = axes(svg, { x0: 80, y0: 20, w: 450, h: 290, xmin: 0, xmax: 3, ymin: -12, ymax: 16, yticks: [-10, -5, 0, 5, 10, 15], ylab: 'change vs dry (%)' });
+    el('line', { x1: 80, y1: ax.fy(0), x2: 530, y2: ax.fy(0), stroke: 'var(--ink)', 'stroke-width': 1.5 }, svg);
+    ['Flank', 'Rake', 'Both'].forEach((c, i) => { const v = (D[c][k] / D.Dry[k] - 1) * 100, x = ax.fx(i + 0.5) - 50, y = ax.fy(Math.max(0, v)), h = Math.abs(ax.fy(v) - ax.fy(0)); el('rect', { x, y, width: 100, height: h, fill: v > 0 ? 'var(--bad)' : 'var(--good)', opacity: .8, rx: 3 }, svg); txt(svg, x + 50, v >= 0 ? y - 8 : y + h + 20, (v > 0 ? '+' : '') + v.toFixed(1) + '%', { 'text-anchor': 'middle', 'font-size': 17, 'font-weight': 600 }); txt(svg, x + 50, 360, c, { 'text-anchor': 'middle', 'font-size': 16, fill: 'var(--muted)' }); txt(svg, x + 50, 378, D[c][k] + ' N', { 'text-anchor': 'middle', 'font-size': 14, fill: 'var(--muted)' }); });
+    $('cbTxt').innerHTML = `Dry ${N[k]} = ${D.Dry[k]} N. ` + (k === 0 ? 'Every cooling mode raised F<sub>c</sub>; both nozzles together raised it most (+7%).' : k === 1 ? 'Rake cooling gave the lowest feed force (−9%), both nozzles −8%, flank only −2%.' : 'The thrust force rose with cooling, most with both nozzles (+14%).') + ' Values read from Fig. 5.';
+  });
+})();
+
+/* ===========================================================
+   17 — COMPOSITES
+   =========================================================== */
+(function () {
+  const caps = ['Drilling set-up: thin-walled SiCp/Al composite on a support block, rotary dynamometer, charge amplifier and data collector.', 'Milling CFRP: specimen clamped on a force dynamometer, pilot hole with slot.', 'Influence of fibre cutting angle on cutting force components (diamond-coated tool, unidirectional CFRP).', 'Influence of fibre cutting angle on fibre forces (parallel and perpendicular to the fibre).'];
+  figTabs('fbTabs', 'fbFig', [['Drilling set-up', 'drillsetup.jpg', 'Drilling set-up with dynamometer for SiCp/Al composite'], ['CFRP milling set-up', 'cfrpsetup.jpg', 'CFRP specimen on a force dynamometer'], ['Force vs fibre angle', 'fiberF.jpg', 'Cutting force components against fibre cutting angle'], ['Fibre forces', 'fiberF2.jpg', 'Fibre-related force components against fibre cutting angle']], i => { $('fbCap').textContent = caps[i]; });
+  const svg = $('faSvg');
+  const curve = [[0, 80], [15, 45], [30, 20], [45, 6], [60, 15], [90, 45], [120, 70], [150, 85], [165, 86], [180, 80]];
+  const Fof = th => { for (let i = 1; i < curve.length; i++) if (th <= curve[i][0]) { const [a, fa] = curve[i - 1], [b, fb] = curve[i]; return fa + (fb - fa) * (th - a) / (b - a); } return 80; };
+  function up() {
+    const phi = +$('faPhi').value, psi = +$('faOr').value, th = ((phi - psi) % 180 + 180) % 180;
+    svg.innerHTML = '';
+    const C = [190, 190], R = 110;
+    const cp = el('clipPath', { id: 'faClip' }, el('defs', {}, svg)); el('rect', { x: 20, y: 20, width: 340, height: 340 }, cp);
+    const g = el('g', { 'clip-path': 'url(#faClip)' }, svg);
+    for (let k = -12; k <= 12; k++) { const d = k * 16, a = rad(-psi); el('line', { x1: C[0] - 300 * Math.cos(a) - d * Math.sin(a), y1: C[1] - 300 * Math.sin(a) + d * Math.cos(a), x2: C[0] + 300 * Math.cos(a) - d * Math.sin(a), y2: C[1] + 300 * Math.sin(a) + d * Math.cos(a), stroke: 'var(--muted)', 'stroke-width': 1.5, opacity: .55 }, g); }
+    el('circle', { cx: C[0], cy: C[1], r: R, fill: 'var(--sheet)', stroke: 'var(--ink)', 'stroke-width': 2, opacity: .92 }, svg);
+    const p = [C[0] + R * Math.cos(rad(-phi)), C[1] + R * Math.sin(rad(-phi))];
+    el('line', { x1: C[0], y1: C[1], x2: p[0], y2: p[1], stroke: 'var(--muted)' }, svg);
+    el('circle', { cx: p[0], cy: p[1], r: 9, fill: 'var(--tool)', stroke: 'var(--ink)' }, svg);
+    const t = [-Math.sin(rad(-phi)), Math.cos(rad(-phi))];
+    arrow(svg, p[0], p[1], p[0] - t[0] * 55, p[1] - t[1] * 55, COL.c, 4);
+    txt(svg, 30, 375, 'fibres: grey lines · red: cutting direction', { 'font-size': 14, fill: 'var(--muted)' });
+    const ax = axes(svg, { x0: 450, y0: 20, w: 380, h: 290, xmin: 0, xmax: 180, ymin: 0, ymax: 100, xticks: [0, 45, 90, 135, 180], yticks: [0, 50, 100], xlab: 'fibre cutting angle θ (°)', ylab: 'total force (N, approx.)' });
+    el('polyline', { points: pts(curve.map(([a, f]) => [ax.fx(a), ax.fy(f)])), fill: 'none', stroke: 'var(--bronze)', 'stroke-width': 3 }, svg);
+    el('circle', { cx: ax.fx(th), cy: ax.fy(Fof(th)), r: 9, fill: COL.c }, svg);
+    $('faTxt').innerHTML = `Fibre cutting angle <b>θ = ${th.toFixed(0)}°</b>, total force about <b>${Fof(th).toFixed(0)} N</b>. ` + (th < 30 || th > 170 ? 'Cutting nearly along the fibres: they peel and buckle.' : th < 70 ? 'Near the minimum: fibres are cut cleanly in shear.' : 'Across the fibres: they bend ahead of the edge before breaking, so force rises.') + ' Change the fibre orientation and see θ shift for the same tooth position.';
+  }
+  bindRange('faPhi', x => x + '°', up); bindRange('faOr', x => x + '°', up);
+  ['faOr', 'faPhi'].forEach(id => $(id).dispatchEvent(new Event('input')));
+})();
+
+/* ===========================================================
+   19 — QUIZ
+   =========================================================== */
+(function () {
+  const Q = [
+    ['In conventional turning, which component is usually largest?', ['F<sub>c</sub>', 'F<sub>f</sub>', 'F<sub>p</sub>'], 0, 'Table 3 trial 1: F<sub>c</sub> 1,671 N, F<sub>f</sub> 702 N, F<sub>p</sub> 475 N. In hard turning with PCBN, F<sub>p</sub> can become the largest.'],
+    ['If F ∝ f<sup>0.6</sup>, doubling the feed multiplies the force by about…', ['×1.2', '×1.5', '×2.0'], 1, '2<sup>0.6</sup> = 1.52, the "about 1.5 times" on slide 13.'],
+    ['In the Kienzle model, a thinner chip gives a specific cutting force k<sub>c</sub> that is…', ['higher', 'lower', 'unchanged'], 0, 'k<sub>c</sub> = k<sub>c1.1</sub>·h<sup>−m<sub>c</sub></sup>: smaller h, larger k<sub>c</sub>.'],
+    ['Why did the coated insert need less cutting force?', ['It was sharper', 'Lower friction coefficient (0.47 vs 0.7)', 'It ran hotter'], 1, 'Less friction raises the shear angle and lowers the force (Merchant, slide 14).'],
+    ['With LN<sub>2</sub> cooling on the rake, which force fell?', ['Main cutting force', 'Feed force', 'Thrust force'], 1, 'The feed force fell about 9% because friction at the chip–tool interface dropped; F<sub>c</sub> rose as the colder material got stronger.'],
+    ['The charge amplifier output clips at 10 V. What do you change?', ['Choose a larger range', 'Choose a smaller range', 'Sample faster'], 0, 'A larger range (more pC per 10 V) brings the peak back inside the output.'],
+  ];
+  const box = $('quiz'), score = $('quizScore'), state = Q.map(() => null);
+  const sc = () => { const d = state.filter(s => s !== null).length, ok = state.filter(s => s === true).length; score.textContent = d ? `${ok} of ${d} correct on first try` : 'Answers are checked instantly. Nothing is recorded.'; };
+  Q.forEach((q, i) => { const d = document.createElement('div'); d.className = 'q'; d.innerHTML = `<div class="qt">${i + 1}. ${q[0]}</div><div class="opts"></div><div class="fb"></div>`; const opts = d.querySelector('.opts'), fb = d.querySelector('.fb'); q[1].forEach((o, j) => { const b = document.createElement('button'); b.className = 'chipbtn'; b.innerHTML = o; b.addEventListener('click', () => { const right = j === q[2]; if (state[i] === null) state[i] = right; b.classList.add(right ? 'right' : 'wrong'); if (right) opts.querySelectorAll('button').forEach(x => x.disabled = true); fb.innerHTML = right ? q[3] : 'Not quite. Try another option.'; sc(); }); opts.appendChild(b); }); box.appendChild(d); });
+  sc();
+})();
+
+/* ===========================================================
+   SLIDE PRESENTATION CONTROLLER (frontend-slides pattern)
+   =========================================================== */
+class SlidePresentation {
+  constructor() {
+    this.slides = [...document.querySelectorAll('.slide')];
+    this.stage = document.getElementById('deckStage');
+    this.current = 0;
+    this.scale(); window.addEventListener('resize', () => this.scale());
+    document.addEventListener('keydown', e => {
+      if (e.target.closest('input, select, textarea')) return;
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); this.go(this.current + 1); }
+      if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); this.go(this.current - 1); }
+      if (e.key === 'Home') this.go(0);
+      if (e.key === 'End') this.go(this.slides.length - 1);
+    });
+    let sx = null, sy = null;
+    document.addEventListener('touchstart', e => { if (e.target.closest('input, button')) { sx = null; return; } sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+    document.addEventListener('touchend', e => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) this.go(this.current + (dx < 0 ? 1 : -1)); sx = null; });
+    document.getElementById('prevBtn').addEventListener('click', () => this.go(this.current - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => this.go(this.current + 1));
+    document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => this.go(+b.dataset.go)));
+    const h = parseInt((location.hash.match(/^#s(\d+)$/) || [])[1], 10);
+    this.go(Number.isFinite(h) ? h - 1 : 0);
+  }
+  scale() {
+    const f = Math.min(innerWidth / 1920, innerHeight / 1080);
+    this.stage.style.transform = `translate(${(innerWidth - 1920 * f) / 2}px, ${(innerHeight - 1080 * f) / 2}px) scale(${f})`;
+  }
+  go(i) {
+    this.current = Math.max(0, Math.min(i, this.slides.length - 1));
+    this.slides.forEach((s, j) => { s.classList.toggle('active', j === this.current); s.classList.toggle('visible', j === this.current); });
+    document.getElementById('count').textContent = `${this.current + 1} / ${this.slides.length}`;
+    document.getElementById('progress').style.width = ((this.current + 1) / this.slides.length * 100) + '%';
+    try { history.replaceState(null, '', '#s' + (this.current + 1)); } catch (e) {}
+  }
+}
+new SlidePresentation();
+
+/* theme toggle */
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+});
+
+</script></body></html>

@@ -11,6 +11,7 @@ Interactive lecture decks for MMT15603 (Faculty of Mechanical Engineering & Tech
 | 4 | [Parameters Affecting Machinability](https://nabilkhalil.github.io/mmt15603/slides/Parameters%20Affecting%20Machinability.html) |
 | 5 | [ISO 3685 Tool-Life Testing](https://nabilkhalil.github.io/mmt15603/slides/ISO%203685%20Tool-Life%20Testing.html) |
 | 6 | [Surface Roughness and Surface Integrity](https://nabilkhalil.github.io/mmt15603/slides/Surface%20Roughness%20and%20Surface%20Integrity.html) |
+| 7 | [Cutting Force](https://nabilkhalil.github.io/mmt15603/slides/Cutting%20Force.html) |
 
 ## Adding a deck
 
